@@ -19,6 +19,7 @@ import (
 	"github.com/rishi/claude-watch/internal/config"
 	"github.com/rishi/claude-watch/internal/db"
 	"github.com/rishi/claude-watch/internal/hooks"
+	"github.com/rishi/claude-watch/internal/setup"
 	cwsync "github.com/rishi/claude-watch/internal/sync"
 )
 
@@ -59,13 +60,28 @@ func cmdServe() {
 	cfg := config.Load()
 	parseServeFlags(cfg)
 
+	// Apply saved config (overrides env defaults if config file exists)
+	setup.LoadSaved(cfg)
+
+	// First-run interactive setup
+	installHooks := true
+	if setup.IsFirstRun() {
+		var err error
+		installHooks, err = setup.Run(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: setup: %v\n", err)
+		}
+	}
+
 	// Ensure directories exist
 	os.MkdirAll(cfg.SessionsDir(), 0o755)
 	os.MkdirAll(cfg.HooksDir(), 0o755)
 
-	// Install hooks
-	if err := hooks.Install(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: install hooks: %v\n", err)
+	// Install hooks (skipped if user declined during setup)
+	if installHooks {
+		if err := hooks.Install(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: install hooks: %v\n", err)
+		}
 	}
 
 	// Open database

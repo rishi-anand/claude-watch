@@ -122,6 +122,13 @@ function loadConversation(sessionId) {
     el.classList.toggle('selected', el.dataset.sessionId === sessionId);
   });
 
+  // Show loading state immediately
+  emptyState.hidden = true;
+  sessionHeader.hidden = true;
+  messageThread.hidden = false;
+  messageThread.innerHTML = '<div class="empty-state" style="height:100%;color:#555;">Loading...</div>';
+  memoryPanel.hidden = true;
+
   fetch('/api/conversations/' + encodeURIComponent(sessionId))
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -130,6 +137,7 @@ function loadConversation(sessionId) {
     })
     .catch(function(err) {
       console.error('Failed to load conversation:', err);
+      messageThread.innerHTML = '<div class="empty-state" style="height:100%;color:#555;">Failed to load conversation.</div>';
     });
 }
 

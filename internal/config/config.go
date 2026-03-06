@@ -18,7 +18,7 @@ func Load() *Config {
 
 	dataDir := os.Getenv("CLAUDE_WATCH_DIR")
 	if dataDir == "" {
-		dataDir = filepath.Join(home, "work", "claude-watch")
+		dataDir = filepath.Join(home, "claude-watch")
 	}
 
 	claudeDir := os.Getenv("CLAUDE_DIR")

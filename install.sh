@@ -45,13 +45,11 @@ chmod +x "$INSTALL_DIR/claude-watch"
 echo ""
 echo "Installed to: $INSTALL_DIR/claude-watch"
 
-# Check if install dir is in PATH
-if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-  echo ""
-  echo "Add $INSTALL_DIR to your PATH by running:"
-  echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
-  echo "  (or ~/.bashrc if you use bash)"
-fi
-
 echo ""
-echo "Run 'claude-watch serve' to get started."
+echo "To make claude-watch available in your shell, add $INSTALL_DIR to your PATH:"
+echo ""
+echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+echo ""
+echo "  (use ~/.bashrc instead if you use bash)"
+echo ""
+echo "Then run: claude-watch serve"

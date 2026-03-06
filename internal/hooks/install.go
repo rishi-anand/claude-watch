@@ -17,7 +17,6 @@ var hookEvents = []struct {
 	{"SessionStart", "session-start.sh", "session-start"},
 	{"UserPromptSubmit", "prompt.sh", "prompt"},
 	{"Stop", "stop.sh", "stop"},
-	{"PreCompact", "compact.sh", "compact"},
 	{"SessionEnd", "session-end.sh", "session-end"},
 }
 

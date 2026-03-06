@@ -75,7 +75,6 @@ func Run(cfg *config.Config) (installHooks bool, err error) {
 		{"SessionStart", "session-start.sh", "session-start"},
 		{"UserPromptSubmit", "prompt.sh", "prompt"},
 		{"Stop", "stop.sh", "stop"},
-		{"PreCompact", "compact.sh", "compact"},
 		{"SessionEnd", "session-end.sh", "session-end"},
 	}
 
@@ -197,7 +196,7 @@ func HooksInstalled(cfg *config.Config) bool {
 	}
 	// Verify scripts still exist on disk
 	hooksDir := cfg.HooksDir()
-	scripts := []string{"session-start.sh", "prompt.sh", "stop.sh", "compact.sh", "session-end.sh"}
+	scripts := []string{"session-start.sh", "prompt.sh", "stop.sh", "session-end.sh"}
 	for _, s := range scripts {
 		if _, err := os.Stat(filepath.Join(hooksDir, s)); os.IsNotExist(err) {
 			return false

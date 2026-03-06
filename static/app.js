@@ -375,12 +375,15 @@ function renderMessage(msg) {
   var avatarClass = '';
   var avatarLetter = '';
 
+  var msgClass = 'msg';
   if (type === 'user') {
+    msgClass += ' msg-user';
     roleLabel = 'User';
     roleClass = 'role-user';
     avatarClass = 'user-avatar';
     avatarLetter = 'U';
   } else if (type === 'assistant') {
+    msgClass += ' msg-assistant';
     roleLabel = 'Assistant';
     roleClass = 'role-assistant';
     avatarClass = 'asst-avatar';
@@ -441,7 +444,7 @@ function renderMessage(msg) {
     textHtml = '<div class="msg-content msg-empty">(no text content)</div>';
   }
 
-  return '<div class="msg" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+  return '<div class="' + msgClass + '" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
     + '<div class="msg-avatar ' + avatarClass + '">' + avatarLetter + '</div>'
     + '<div class="msg-body">'
     + '<div class="msg-label"><span class="role ' + roleClass + '">' + roleLabel + '</span><span class="ts">' + ts + '</span></div>'

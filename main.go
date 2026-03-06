@@ -64,11 +64,8 @@ func cmdServe() {
 	setup.LoadSaved(cfg)
 
 	// First-run interactive setup
-	installHooks := true
 	if setup.IsFirstRun() {
-		var err error
-		installHooks, err = setup.Run(cfg)
-		if err != nil {
+		if _, err := setup.Run(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: setup: %v\n", err)
 		}
 	}
@@ -77,8 +74,8 @@ func cmdServe() {
 	os.MkdirAll(cfg.SessionsDir(), 0o755)
 	os.MkdirAll(cfg.HooksDir(), 0o755)
 
-	// Install hooks (skipped if user declined during setup)
-	if installHooks {
+	// Install hooks only if not already installed (scripts missing or not confirmed yet)
+	if !setup.HooksInstalled(cfg) {
 		if err := hooks.Install(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: install hooks: %v\n", err)
 		}

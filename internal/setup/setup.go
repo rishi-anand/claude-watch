@@ -181,6 +181,31 @@ func LoadSaved(cfg *config.Config) bool {
 	return true
 }
 
+// HooksInstalled returns true if the saved config records hooks as installed
+// AND the hook scripts actually exist on disk.
+func HooksInstalled(cfg *config.Config) bool {
+	data, err := os.ReadFile(ConfigFilePath())
+	if err != nil {
+		return false
+	}
+	var saved savedConfig
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return false
+	}
+	if !saved.HooksInstalled {
+		return false
+	}
+	// Verify scripts still exist on disk
+	hooksDir := cfg.HooksDir()
+	scripts := []string{"session-start.sh", "prompt.sh", "stop.sh", "compact.sh", "session-end.sh"}
+	for _, s := range scripts {
+		if _, err := os.Stat(filepath.Join(hooksDir, s)); os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
 type savedConfig struct {
 	DataDir      string `json:"data_dir"`
 	Port         int    `json:"port,omitempty"`

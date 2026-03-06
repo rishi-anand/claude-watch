@@ -132,7 +132,7 @@ claude --resume <session-id>
 ## Data storage
 
 ```
-~/work/claude-watch/
+~/claude-watch/
   sessions/
     my-project/
       a1b2c3d4-....md     ← full conversation in Markdown (source of truth)
@@ -148,7 +148,7 @@ claude --resume <session-id>
     session-end.sh
 ```
 
-**Markdown files are the source of truth.** SQLite is a rebuildable index. If you back up one thing, back up `~/work/claude-watch/sessions/`.
+**Markdown files are the source of truth.** SQLite is a rebuildable index. If you back up one thing, back up `~/claude-watch/sessions/`.
 
 ---
 

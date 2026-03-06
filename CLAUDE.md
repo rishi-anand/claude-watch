@@ -21,8 +21,8 @@ CGO_ENABLED=0 go build -o claude-watch .
 - **Hooks use CLI, not HTTP** — hook scripts call `claude-watch hook <event>` directly
 
 ## Data directories
-- Source code: `~/work/src/claude-watch/`
-- App data: `~/work/claude-watch/`
+- 
+- App data: `~/claude-watch/`
   - `sessions/{project}/{session-id}.md` — conversation history (source of truth)
   - `claude-watch.db` — SQLite search index (rebuildable)
   - `hooks/*.sh` — installed hook scripts

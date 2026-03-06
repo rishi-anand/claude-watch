@@ -107,7 +107,7 @@ This eliminates filesystem scanning — no need to search for the right JSONL fi
 
 When `claude-watch serve` runs for the first time, it:
 
-1. Writes the 5 hook scripts to `~/work/claude-watch/hooks/`
+1. Writes the 5 hook scripts to `~/claude-watch/hooks/`
 2. Reads `~/.claude/settings.json`
 3. Merges the hook entries (does not overwrite existing hooks)
 4. Writes back atomically (temp file + rename)
@@ -129,11 +129,11 @@ The merge is additive — existing hooks in `settings.json` are preserved.
         │
         │  markdown.WriteSession / AppendMessages
         ▼
-  ~/work/claude-watch/sessions/{project}/{session-id}.md
+  ~/claude-watch/sessions/{project}/{session-id}.md
         │
         │  store.UpsertMessages + FTS5 delete+reinsert
         ▼
-  ~/work/claude-watch/claude-watch.db  (sessions + messages + messages_fts)
+  ~/claude-watch/claude-watch.db  (sessions + messages + messages_fts)
 ```
 
 ### Markdown file format (source of truth)
@@ -318,8 +318,8 @@ ordered by `timestamp, seq` (not seq alone, since each file restarts seq at 1).
 ```
 claude-watch serve
   │
-  ├── 1. Ensure ~/work/claude-watch/{sessions,hooks}/ exist
-  ├── 2. Install hook scripts to ~/work/claude-watch/hooks/
+  ├── 1. Ensure ~/claude-watch/{sessions,hooks}/ exist
+  ├── 2. Install hook scripts to ~/claude-watch/hooks/
   ├── 3. Merge hooks into ~/.claude/settings.json (atomic rename)
   ├── 4. Open SQLite, run schema migrations (ALTER TABLE if columns missing)
   ├── 5. Full scan: ~/.claude/projects/**/*.jsonl → .md files → SQLite

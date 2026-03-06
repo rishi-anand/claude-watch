@@ -1,5 +1,22 @@
 // claude-watch frontend
 
+var PROJECT_COLORS = {
+  'claude-watch':        { bg: '#fff3cd', text: '#92400e', dot: '#d97706' },
+  'palette-agentic-cli': { bg: '#d1fae5', text: '#065f46', dot: '#059669' },
+  'teams':               { bg: '#ede9fe', text: '#4c1d95', dot: '#7c3aed' },
+  'spectre':             { bg: '#cffafe', text: '#164e63', dot: '#0891b2' },
+  'teams-bdd':           { bg: '#ffe4e6', text: '#881337', dot: '#e11d48' },
+  'rishi':               { bg: '#dbeafe', text: '#1e3a8a', dot: '#2563eb' },
+  'spectre-tui':         { bg: '#cffafe', text: '#164e63', dot: '#0891b2' },
+  'stylus':              { bg: '#ffedd5', text: '#7c2d12', dot: '#ea580c' },
+  'vmo-manager':         { bg: '#ecfccb', text: '#365314', dot: '#65a30d' },
+};
+var DEFAULT_PROJECT_COLOR = { bg: '#f3f4f6', text: '#374151', dot: '#6b7280' };
+
+function getProjectColor(name) {
+  return PROJECT_COLORS[name] || DEFAULT_PROJECT_COLOR;
+}
+
 var state = {
   conversations: [],
   projects: [],
@@ -182,9 +199,13 @@ function renderConversationList() {
     if (preview.length > 80) preview = preview.substring(0, 80) + '...';
     var date = formatRelativeDate(c.lastActiveAt || c.startedAt);
     var compaction = c.hasCompaction ? '<span class="conv-compaction-dot" title="Has compaction"></span>' : '';
+    var color = getProjectColor(c.projectName || '');
+    var badge = '<span class="project-badge" style="background:' + color.bg + ';color:' + color.text + '">'
+      + escapeHtml(c.projectName || 'unknown') + '</span>';
+    var borderStyle = selected ? ' style="border-left-color:' + color.dot + '"' : '';
 
-    html += '<div class="conv-item' + selected + '" data-session-id="' + escapeAttr(c.sessionId) + '">'
-      + '<div class="conv-project">' + escapeHtml(c.projectName || 'unknown') + '</div>'
+    html += '<div class="conv-item' + selected + '"' + borderStyle + ' data-session-id="' + escapeAttr(c.sessionId) + '">'
+      + '<div class="conv-project">' + badge + '</div>'
       + '<div class="conv-preview">' + escapeHtml(preview) + '</div>'
       + '<div class="conv-meta">'
       + '<span>' + date + '</span>'
@@ -219,8 +240,9 @@ function renderSearchResults() {
   var html = '';
   state.searchResults.forEach(function(r) {
     var date = formatRelativeDate(r.timestamp);
+    var rcolor = getProjectColor(r.projectName || '');
     html += '<div class="search-result" data-session-id="' + escapeAttr(r.sessionId) + '" data-uuid="' + escapeAttr(r.uuid || '') + '">'
-      + '<div class="sr-project">' + escapeHtml(r.projectName || 'unknown') + '</div>'
+      + '<div class="sr-project"><span class="project-badge" style="background:' + rcolor.bg + ';color:' + rcolor.text + '">' + escapeHtml(r.projectName || 'unknown') + '</span></div>'
       + '<div class="sr-snippet">' + highlightSnippet(r.snippet || r.contentText || '') + '</div>'
       + '<div class="sr-time">' + date + '</div>'
       + '</div>';
@@ -284,24 +306,34 @@ function renderSession(data) {
   messageThread.hidden = false;
 
   // Session header
-  var headerHtml = '<span class="sh-project">' + escapeHtml(session.projectName || '') + '</span>';
+  var hcolor = getProjectColor(session.projectName || '');
+  var headerHtml = '<span class="project-badge" style="background:' + hcolor.bg + ';color:' + hcolor.text + '">'
+    + escapeHtml(session.projectName || 'unknown') + '</span>';
   if (session.slug) {
     headerHtml += '<span class="sh-id">' + escapeHtml(session.slug) + '</span>';
   }
-  headerHtml += '<span class="sh-id">' + escapeHtml(session.sessionId || '') + '<button class="sh-copy-btn" id="copy-sid-btn">Copy</button></span>';
+  headerHtml += '<span class="sh-id">' + escapeHtml((session.sessionId || '').substring(0, 8)) + '…'
+    + '<button class="sh-copy-btn" id="copy-sid-btn">Copy ID</button></span>';
   if (session.gitBranch) {
     headerHtml += '<span class="sh-branch">' + escapeHtml(session.gitBranch) + '</span>';
   }
   if (session.model) {
     headerHtml += '<span class="sh-model">' + escapeHtml(session.model) + '</span>';
   }
+  if (session.messageCount) {
+    headerHtml += '<span class="sh-msg-count">' + session.messageCount + ' msgs</span>';
+  }
   sessionHeader.innerHTML = headerHtml;
 
   document.getElementById('copy-sid-btn').addEventListener('click', function() {
     var btn = this;
     navigator.clipboard.writeText(session.sessionId).then(function() {
-      btn.textContent = 'Copied!';
-      setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy ID';
+        btn.classList.remove('copied');
+      }, 1500);
     });
   });
 
@@ -338,21 +370,25 @@ function renderMessage(msg) {
     return renderCompactSummary(msg);
   }
 
-  var cssClass = 'msg';
   var roleLabel = '';
   var roleClass = '';
+  var avatarClass = '';
+  var avatarLetter = '';
 
   if (type === 'user') {
-    cssClass += ' msg-user';
     roleLabel = 'User';
     roleClass = 'role-user';
+    avatarClass = 'user-avatar';
+    avatarLetter = 'U';
   } else if (type === 'assistant') {
-    cssClass += ' msg-assistant';
     roleLabel = 'Assistant';
     roleClass = 'role-assistant';
+    avatarClass = 'asst-avatar';
+    avatarLetter = 'A';
   } else {
     roleLabel = type;
-    roleClass = '';
+    avatarClass = 'asst-avatar';
+    avatarLetter = type[0] ? type[0].toUpperCase() : '?';
   }
 
   var ts = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
@@ -405,10 +441,13 @@ function renderMessage(msg) {
     textHtml = '<div class="msg-content msg-empty">(no text content)</div>';
   }
 
-  return '<div class="msg ' + cssClass + '" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+  return '<div class="msg" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+    + '<div class="msg-avatar ' + avatarClass + '">' + avatarLetter + '</div>'
+    + '<div class="msg-body">'
     + '<div class="msg-label"><span class="role ' + roleClass + '">' + roleLabel + '</span><span class="ts">' + ts + '</span></div>'
     + textHtml
     + toolHtml
+    + '</div>'
     + '</div>';
 }
 
@@ -422,11 +461,14 @@ function renderCompactBoundary(msg) {
 function renderCompactSummary(msg) {
   var content = msg.contentText || '';
   var ts = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
-  return '<div class="msg msg-compact-summary" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+  return '<div class="msg" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+    + '<div class="msg-avatar summary-avatar">S</div>'
+    + '<div class="msg-body">'
     + '<div class="msg-label"><span class="role role-summary">Summary</span><span class="ts">' + ts + '</span></div>'
-    + '<details><summary>Show compaction summary</summary>'
+    + '<details><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;font-family:var(--font-mono)">Show compaction summary</summary>'
     + '<div class="msg-content">' + renderMarkdown(content) + '</div>'
     + '</details>'
+    + '</div>'
     + '</div>';
 }
 

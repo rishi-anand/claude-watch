@@ -50,18 +50,51 @@ func UpsertMessages(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) e
 		}
 	}
 
-	// Rebuild FTS for this session: delete old entries, reinsert all with content
-	tx.Exec("DELETE FROM messages_fts WHERE session_id = ?", sessionID)
-	ftsStmt, err := tx.Prepare("INSERT INTO messages_fts(session_id, msg_uuid, content_text) VALUES (?, ?, ?)")
-	if err == nil {
-		defer ftsStmt.Close()
-		for _, m := range msgs {
-			if m.ContentText != "" {
-				ftsStmt.Exec(sessionID, m.UUID, m.ContentText)
-			}
+	// Update FTS per-message (not per-session) to avoid wiping entries from
+	// other JSONL files of the same session (multi-file sessions from resumes).
+	ftsDelete, err := tx.Prepare("DELETE FROM messages_fts WHERE session_id = ? AND msg_uuid = ?")
+	if err != nil {
+		return tx.Commit()
+	}
+	defer ftsDelete.Close()
+	ftsInsert, err := tx.Prepare("INSERT INTO messages_fts(session_id, msg_uuid, content_text) VALUES (?, ?, ?)")
+	if err != nil {
+		return tx.Commit()
+	}
+	defer ftsInsert.Close()
+
+	for _, m := range msgs {
+		ftsDelete.Exec(sessionID, m.UUID)
+		if m.ContentText != "" {
+			ftsInsert.Exec(sessionID, m.UUID, m.ContentText)
 		}
 	}
 
+	return tx.Commit()
+}
+
+// RebuildFTS drops and rebuilds the entire FTS index from the messages table.
+// Used by the rebuild command to ensure FTS matches what's in the DB,
+// including messages that predate compaction and are no longer in JSONL files.
+func RebuildFTS(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM messages_fts"); err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`
+		INSERT INTO messages_fts(session_id, msg_uuid, content_text)
+		SELECT session_id, msg_uuid, content_text
+		FROM messages
+		WHERE content_text != ''`)
+	if err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

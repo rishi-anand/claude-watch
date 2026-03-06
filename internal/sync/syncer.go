@@ -18,7 +18,7 @@ func SyncFromTranscript(cfg *config.Config, db *sql.DB, transcriptPath string) e
 		return fmt.Errorf("parse JSONL: %w", err)
 	}
 	if session.SessionID == "" {
-		return fmt.Errorf("no session ID found in %s", transcriptPath)
+		return nil // silently skip files without a session ID (incomplete/empty sessions)
 	}
 
 	// Check if MD file already exists
@@ -51,6 +51,13 @@ func SyncFromTranscript(cfg *config.Config, db *sql.DB, transcriptPath string) e
 		return fmt.Errorf("upsert messages: %w", err)
 	}
 
+	// Record JSONL mtime so future startup scans can skip unchanged files.
+	// This ensures serve restarts (and post-rebuild starts) are fast.
+	if info, err := os.Stat(transcriptPath); err == nil {
+		mtime := float64(info.ModTime().UnixMilli()) / 1000.0
+		recordJSONLMtime(db, transcriptPath, mtime)
+	}
+
 	return nil
 }
 
@@ -73,16 +80,12 @@ func SyncAll(cfg *config.Config, db *sql.DB) error {
 	}
 	_ = mtimes // mtimes used for md files, jsonlMtimes for JSONL
 
+	if len(changed) > 0 {
+		fmt.Printf("Syncing %d session files...\n", len(changed))
+	}
 	for _, path := range changed {
 		if err := SyncFromTranscript(cfg, db, path); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: sync %s: %v\n", path, err)
-			continue
-		}
-		// Record JSONL mtime
-		info, err := os.Stat(path)
-		if err == nil {
-			mtime := float64(info.ModTime().UnixMilli()) / 1000.0
-			recordJSONLMtime(db, path, mtime)
 		}
 	}
 

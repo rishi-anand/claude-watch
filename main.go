@@ -20,6 +20,7 @@ import (
 	"github.com/rishi/claude-watch/internal/db"
 	"github.com/rishi/claude-watch/internal/hooks"
 	"github.com/rishi/claude-watch/internal/setup"
+	"github.com/rishi/claude-watch/internal/store"
 	cwsync "github.com/rishi/claude-watch/internal/sync"
 )
 
@@ -174,10 +175,10 @@ func cmdHook(event string) {
 
 func cmdRebuild() {
 	cfg := config.Load()
+	setup.LoadSaved(cfg)
 
-	// Remove existing database
-	os.Remove(cfg.DBPath())
-
+	// Open existing DB (keep all messages — including pre-compaction ones
+	// no longer in JSONL). Do NOT delete the DB.
 	database, err := db.Open(cfg.DBPath())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: open database: %v\n", err)
@@ -185,15 +186,25 @@ func cmdRebuild() {
 	}
 	defer database.Close()
 
-	fmt.Println("Rebuilding index from all sessions...")
+	// Re-sync from JSONL to pick up any new messages
+	fmt.Println("Syncing from JSONL files...")
 	if err := rebuildFromJSONL(cfg, database); err != nil {
-		fmt.Fprintf(os.Stderr, "error: rebuild: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: sync: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Rebuild FTS from the complete messages table — this preserves
+	// pre-compaction messages that are no longer in JSONL files.
+	fmt.Println("Rebuilding FTS index from messages table...")
+	if err := store.RebuildFTS(database); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: rebuild FTS: %v\n", err)
 	}
 
 	var count int
 	database.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&count)
-	fmt.Printf("Rebuilt index with %d sessions\n", count)
+	var ftsCount int
+	database.QueryRow("SELECT COUNT(*) FROM messages_fts").Scan(&ftsCount)
+	fmt.Printf("Done: %d sessions, %d messages indexed in FTS\n", count, ftsCount)
 }
 
 func rebuildFromJSONL(cfg *config.Config, database *sql.DB) error {

@@ -1,0 +1,6 @@
+claude-watch
+*.db
+*.db-shm
+*.db-wal
+e2e/cmd/
+/tmp/

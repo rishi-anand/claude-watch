@@ -1,0 +1,167 @@
+package claude
+
+import (
+	"bufio"
+	"encoding/json"
+	"os"
+	"strings"
+	"time"
+)
+
+func ParseJSONL(path string) (*Session, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 10*1024*1024), 10*1024*1024)
+
+	session := &Session{}
+	seq := 0
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry Entry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+
+		// Set session ID from first entry that has one
+		if session.SessionID == "" && entry.SessionID != "" {
+			session.SessionID = entry.SessionID
+		}
+
+		// Set project path from first entry with cwd
+		if session.ProjectPath == "" && entry.CWD != "" {
+			session.ProjectPath = entry.CWD
+			session.ProjectName = ProjectNameFromCWD(entry.CWD)
+		}
+
+		// Parse timestamp
+		ts, _ := time.Parse(time.RFC3339Nano, entry.Timestamp)
+		if !ts.IsZero() {
+			if session.StartedAt.IsZero() || ts.Before(session.StartedAt) {
+				session.StartedAt = ts
+			}
+			if ts.After(session.LastActiveAt) {
+				session.LastActiveAt = ts
+			}
+		}
+
+		switch entry.Type {
+		case "progress", "queue-operation", "file-history-snapshot":
+			continue
+		case "system":
+			if entry.Subtype == "turn_duration" {
+				continue
+			}
+			if entry.Subtype == "compact_boundary" {
+				session.HasCompaction = true
+				seq++
+				msg := ParsedMessage{
+					UUID:      entry.UUID,
+					MsgType:   "compact_boundary",
+					Timestamp: ts,
+					Seq:       seq,
+				}
+				session.Messages = append(session.Messages, msg)
+			}
+			continue
+		case "user":
+			if entry.Message == nil {
+				continue
+			}
+			seq++
+			msgType := "user"
+			if entry.Message.IsCompactSummary {
+				msgType = "compact_summary"
+			}
+			contentText := ExtractText(entry.Message.Content)
+			contentJSON := rawContentJSON(entry.Message.Content)
+			msg := ParsedMessage{
+				UUID:             entry.UUID,
+				ParentUUID:       entry.ParentUUID,
+				MsgType:          msgType,
+				Role:             "user",
+				ContentText:      contentText,
+				ContentJSON:      contentJSON,
+				IsCompactSummary: entry.Message.IsCompactSummary,
+				IsSidechain:      entry.IsSidechain,
+				Timestamp:        ts,
+				Seq:              seq,
+			}
+			session.Messages = append(session.Messages, msg)
+		case "assistant":
+			if entry.Message == nil {
+				continue
+			}
+			// Set model from first assistant message
+			if session.Model == "" && entry.Message.Model != "" {
+				session.Model = entry.Message.Model
+			}
+			seq++
+			contentText := ExtractText(entry.Message.Content)
+			contentJSON := rawContentJSON(entry.Message.Content)
+			msg := ParsedMessage{
+				UUID:        entry.UUID,
+				ParentUUID:  entry.ParentUUID,
+				MsgType:     "assistant",
+				Role:        "assistant",
+				ContentText: contentText,
+				ContentJSON: contentJSON,
+				IsSidechain: entry.IsSidechain,
+				Timestamp:   ts,
+				Seq:         seq,
+			}
+			session.Messages = append(session.Messages, msg)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
+
+func ExtractText(content ContentValue) string {
+	if content.Text != "" {
+		return content.Text
+	}
+	var parts []string
+	for _, block := range content.Blocks {
+		if block.Type == "text" && block.Text != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func rawContentJSON(content ContentValue) string {
+	if len(content.Blocks) > 0 {
+		data, err := json.Marshal(content.Blocks)
+		if err == nil {
+			return string(data)
+		}
+	}
+	return ""
+}
+
+func ProjectNameFromCWD(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	// Remove trailing slash
+	cwd = strings.TrimRight(cwd, "/")
+	idx := strings.LastIndex(cwd, "/")
+	if idx >= 0 {
+		return cwd[idx+1:]
+	}
+	return cwd
+}

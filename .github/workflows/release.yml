@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+            -o claude-watch-${{ matrix.suffix }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-watch-${{ matrix.suffix }}
+          path: claude-watch-${{ matrix.suffix }}
+
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          cd dist
+          sha256sum claude-watch-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/claude-watch-*
+            dist/checksums.txt
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Download the binary for your platform:
+
+            | Platform | Binary |
+            |----------|--------|
+            | macOS Apple Silicon | `claude-watch-darwin-arm64` |
+            | macOS Intel | `claude-watch-darwin-amd64` |
+            | Linux x64 | `claude-watch-linux-amd64` |
+            | Linux ARM64 | `claude-watch-linux-arm64` |
+
+            ```bash
+            # macOS Apple Silicon example
+            curl -L https://github.com/rishi-anand/claude-watch/releases/download/${{ github.ref_name }}/claude-watch-darwin-arm64 \
+              -o claude-watch
+            chmod +x claude-watch
+            ./claude-watch serve
+            ```

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>claude-watch</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header id="header">
+    <div class="header-title">claude-watch</div>
+    <div class="header-search">
+      <div class="search-wrap">
+        <input type="text" id="search-input" placeholder="Search conversations..." autocomplete="off">
+        <button id="search-clear" class="search-clear" hidden>&times;</button>
+      </div>
+      <div class="search-hint"><code>foo bar</code> = phrase &middot; <code>foo,bar</code> = AND &middot; <code>foo;bar</code> = OR</div>
+    </div>
+  </header>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-filter">
+        <select id="project-filter">
+          <option value="all">All projects</option>
+        </select>
+      </div>
+      <div id="conversation-list" class="conversation-list"></div>
+    </aside>
+    <main id="main-panel">
+      <div id="empty-state" class="empty-state">Select a conversation to view</div>
+      <div id="session-header" class="session-header" hidden></div>
+      <div id="message-thread" class="message-thread" hidden></div>
+      <div id="memory-panel" hidden></div>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

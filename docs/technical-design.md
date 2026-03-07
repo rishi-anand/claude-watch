@@ -19,12 +19,12 @@ survive the compaction.
 │                     Claude Code (claude CLI)                  │
 │                                                              │
 │  fires hooks → SessionStart, UserPromptSubmit, Stop,        │
-│                PreCompact, SessionEnd                        │
+│                SessionEnd                                    │
 └──────────────────┬───────────────────────────────────────────┘
                    │ JSON payload on stdin (includes transcript_path)
                    ▼
 ┌──────────────────────────────────────────────────────────────┐
-│              Hook scripts (~/.claude-watch/hooks/*.sh)        │
+│              Hook scripts (~/claude-watch/hooks/*.sh)        │
 │         cat | claude-watch hook <event>                      │
 └──────────────────┬───────────────────────────────────────────┘
                    │
@@ -58,27 +58,28 @@ survive the compaction.
 Claude Code supports lifecycle hooks — shell commands invoked at specific points in a
 conversation. Each hook receives a JSON payload on stdin with context about the current event.
 
-| Hook event | When it fires |
-|------------|---------------|
-| `SessionStart` | When a new conversation is created |
-| `UserPromptSubmit` | When the user submits a prompt |
-| `Stop` | When Claude finishes a response turn |
-| `PreCompact` | **Before** context compaction — critical for history preservation |
-| `SessionEnd` | When the session ends |
+| Hook event | When it fires | Installed by claude-watch |
+|------------|---------------|--------------------------|
+| `SessionStart` | When a new conversation is created | ✓ |
+| `UserPromptSubmit` | When the user submits a prompt | ✓ |
+| `Stop` | When Claude finishes a response turn | ✓ |
+| `PreCompact` | Before context compaction | — (not installed) |
+| `SessionEnd` | When the session ends | ✓ |
+
+`PreCompact` is not installed because the `Stop` hook already fires after every turn
+and captures the full transcript incrementally. History is preserved continuously, not just
+at compaction time.
 
 ### Hook script pattern
 
-Each hook script at `~/.claude-watch/hooks/<event>.sh`:
+Each hook script at `~/claude-watch/hooks/<event>.sh`:
 
 ```bash
 #!/usr/bin/env bash
-PAYLOAD=$(cat)
-/path/to/claude-watch hook stop <<< "$PAYLOAD"
+cat | /path/to/claude-watch hook <event>
 ```
 
-The script:
-1. Reads the JSON payload from stdin (`cat`)
-2. Passes it directly to the `claude-watch hook <event>` CLI subcommand
+The script pipes stdin directly to the `claude-watch hook <event>` CLI subcommand.
 
 **Why CLI invocation instead of HTTP?**
 The HTTP server (`claude-watch serve`) does not need to be running for hooks to capture data.
@@ -107,7 +108,7 @@ This eliminates filesystem scanning — no need to search for the right JSONL fi
 
 When `claude-watch serve` runs for the first time, it:
 
-1. Writes the 5 hook scripts to `~/claude-watch/hooks/`
+1. Writes the 4 hook scripts to `~/claude-watch/hooks/`
 2. Reads `~/.claude/settings.json`
 3. Merges the hook entries (does not overwrite existing hooks)
 4. Writes back atomically (temp file + rename)
@@ -194,7 +195,7 @@ CREATE TABLE sessions (
     message_count   INTEGER DEFAULT 0,
     has_compaction  INTEGER DEFAULT 0,
     md_path         TEXT NOT NULL,   -- path to .md file (source of truth)
-    md_mtime        REAL NOT NULL,   -- mtime at last index (skip if unchanged)
+    md_mtime        REAL NOT NULL,   -- mtime of .md at last index
     memory_md       TEXT
 );
 
@@ -219,9 +220,10 @@ CREATE VIRTUAL TABLE messages_fts USING fts5(
     content_text
 );
 
--- Track .md file mtimes to skip re-indexing unchanged files
+-- Track JSONL file mtimes to skip re-parsing unchanged files on startup.
+-- Keys are stored with a "jsonl:" prefix (e.g. "jsonl:/path/to/session.jsonl").
 CREATE TABLE index_state (
-    md_path     TEXT PRIMARY KEY,
+    md_path     TEXT PRIMARY KEY,  -- stores "jsonl:<path>" keys
     last_mtime  REAL NOT NULL
 );
 ```
@@ -235,19 +237,20 @@ with crash safety.
 
 ---
 
-## Search query parsing
+## Search
 
-The search bar supports a compact query language translated to FTS5 syntax:
+The search bar accepts plain words — all words must match (implicit AND). Hyphens and
+apostrophes are treated as word separators, matching how FTS5 tokenizes text.
 
-| Input | Operator | FTS5 |
-|-------|----------|------|
-| `ssh tunnel` | exact phrase | `"ssh tunnel"` |
-| `ssh,tunnel` | AND | `ssh AND tunnel` |
-| `ssh;tunnel` | OR | `ssh OR tunnel` |
-| `ssh tunnel,foo` | phrase AND term | `"ssh tunnel" AND foo` |
+| Input | FTS5 query | Matches |
+|-------|-----------|---------|
+| `ssh tunnel` | `ssh AND tunnel` | messages with both words |
+| `palette-agentic-cli` | `palette AND agentic AND cli` | messages with all three tokens |
+| `Cloud's` | `Cloud AND s` | messages with "Cloud" |
 
 The `snippet()` FTS5 function returns highlighted excerpts with `<mark>` tags for display
-in search results.
+in search results. The frontend escapes all HTML in snippets before rendering, then restores
+only the `<mark>` tags.
 
 ---
 
@@ -319,11 +322,11 @@ ordered by `timestamp, seq` (not seq alone, since each file restarts seq at 1).
 claude-watch serve
   │
   ├── 1. Ensure ~/claude-watch/{sessions,hooks}/ exist
-  ├── 2. Install hook scripts to ~/claude-watch/hooks/
-  ├── 3. Merge hooks into ~/.claude/settings.json (atomic rename)
-  ├── 4. Open SQLite, run schema migrations (ALTER TABLE if columns missing)
-  ├── 5. Full scan: ~/.claude/projects/**/*.jsonl → .md files → SQLite
-  │       (skips JSONL files whose mtime hasn't changed since last index)
+  ├── 2. Install hook scripts (skipped if already installed)
+  ├── 3. Open SQLite, run schema migrations
+  ├── 4. Full scan: ~/.claude/projects/**/*.jsonl → .md files → SQLite
+  │       (skips JSONL files whose mtime matches index_state record)
+  ├── 5. Auto-rebuild FTS if messages_fts count < messages count
   ├── 6. Start HTTP server on :7823
   └── 7. Open browser after 500ms
 ```
@@ -339,14 +342,12 @@ GET  /api/conversations?page=1&limit=50&project=my-project
 GET  /api/conversations/:sessionId
 GET  /api/search?q=<query>&page=1&limit=50
 GET  /api/status
-POST /api/hooks/session-start
-POST /api/hooks/prompt
-POST /api/hooks/stop
-POST /api/hooks/compact
-POST /api/hooks/session-end
+GET  /          → index.html
+GET  /static/*  → embedded static files
 ```
 
 All responses are JSON. The HTTP server uses only stdlib `net/http` — no external router.
+There are no POST hook endpoints — hooks invoke the CLI binary directly.
 
 ---
 
@@ -361,3 +362,4 @@ All responses are JSON. The HTTP server uses only stdlib `net/http` — no exter
 | No polling / background timer | All captures are event-driven via hooks; `serve` does one startup scan |
 | Append-only .md files | Safe from partial write corruption; efficient for large sessions |
 | Read-only UI | Never modifies Claude's data; prevents accidental corruption |
+| JSONL mtime in index_state | Fast startup: skip re-parsing unchanged files using stored mtime |

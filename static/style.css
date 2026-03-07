@@ -187,8 +187,39 @@ html, body {
 /* ── Layout ── */
 #app {
   display: grid;
-  grid-template-columns: 270px 1fr;
+  grid-template-columns: var(--sidebar-w, 270px) 5px 1fr;
   height: calc(100vh - 54px);
+}
+
+/* ── Resize handle ── */
+#resize-handle {
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.15s;
+  position: relative;
+  z-index: 10;
+}
+
+#resize-handle:hover,
+#resize-handle.dragging {
+  background: var(--accent);
+}
+
+#resize-handle::after {
+  content: '⋮';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-faint);
+  font-size: 14px;
+  pointer-events: none;
+  line-height: 1;
+}
+
+#resize-handle:hover::after,
+#resize-handle.dragging::after {
+  color: #fff;
 }
 
 /* ── Sidebar ── */

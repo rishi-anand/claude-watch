@@ -698,6 +698,51 @@ function initTheme() {
   });
 }
 
+// ── Resize handle ──
+function initResize() {
+  var handle = document.getElementById('resize-handle');
+  var appEl  = document.getElementById('app');
+  var MIN_W  = 160;
+  var MAX_W  = 700;
+
+  // Restore saved width
+  var saved = parseInt(localStorage.getItem('sidebarWidth'), 10);
+  if (saved >= MIN_W && saved <= MAX_W) {
+    appEl.style.gridTemplateColumns = saved + 'px 5px 1fr';
+  }
+
+  var dragging = false;
+  var startX   = 0;
+  var startW   = 0;
+
+  handle.addEventListener('mousedown', function(e) {
+    dragging = true;
+    startX   = e.clientX;
+    startW   = parseInt(getComputedStyle(appEl).gridTemplateColumns, 10);
+    handle.classList.add('dragging');
+    document.body.style.cursor     = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    var w = Math.max(MIN_W, Math.min(MAX_W, startW + (e.clientX - startX)));
+    appEl.style.gridTemplateColumns = w + 'px 5px 1fr';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+    var w = parseInt(getComputedStyle(appEl).gridTemplateColumns, 10);
+    localStorage.setItem('sidebarWidth', w);
+  });
+}
+
 // Boot
 initTheme();
+initResize();
 init();

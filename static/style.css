@@ -35,6 +35,32 @@
   --font-prose: Georgia, 'Times New Roman', serif;
 }
 
+[data-theme="dark"] {
+  --bg-app:      #0f0f0f;
+  --bg-surface:  #141414;
+  --bg-panel:    #111111;
+  --bg-subtle:   #1a1a1a;
+  --bg-hover:    #1e1e1e;
+  --bg-selected: #252520;
+
+  --border:       #2a2a2a;
+  --border-light: #222222;
+  --border-input: #333333;
+  --border-focus: #d97706;
+
+  --text:       #e0e0e0;
+  --text-2:     #b0b0b0;
+  --text-muted: #888888;
+  --text-faint: #555555;
+
+  --accent:          #d4860a;
+  --accent-light:    #e6a020;
+  --accent-bg:       #1a1400;
+  --accent-badge-bg: #2a1d00;
+  --accent-badge-tx: #e6a020;
+  --accent-border:   #4a3000;
+}
+
 html, body {
   height: 100%;
   overflow: hidden;
@@ -604,6 +630,44 @@ html, body {
   margin-top: 8px;
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* ── Dark theme message tints ── */
+[data-theme="dark"] .msg-user {
+  background: #141008;
+}
+
+[data-theme="dark"] .msg-assistant {
+  background: #0f0f16;
+}
+
+[data-theme="dark"] .search-hint code {
+  background: #1e1e1e;
+  border-color: #333;
+  color: var(--text-2);
+}
+
+/* ── Theme toggle ── */
+.theme-toggle {
+  margin-left: auto;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 15px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent-light);
+  color: var(--accent);
 }
 
 /* ── Scrollbars ── */

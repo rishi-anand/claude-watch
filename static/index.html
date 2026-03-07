@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <script>
+    // Apply saved theme before paint to avoid flash
+    (function() {
+      var t = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <header id="header">
     <div class="header-logo">W</div>
     <div class="header-title">claude-watch</div>
@@ -17,6 +24,7 @@
       </div>
       <div class="search-hint"><code>foo bar</code> = phrase &middot; <code>foo,bar</code> = AND &middot; <code>foo;bar</code> = OR</div>
     </div>
+    <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">☀</button>
   </header>
   <div id="app">
     <aside id="sidebar">

@@ -664,5 +664,26 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// ── Theme toggle ──
+function initTheme() {
+  var btn = document.getElementById('theme-toggle');
+  var html = document.documentElement;
+
+  function applyTheme(theme) {
+    html.setAttribute('data-theme', theme);
+    btn.textContent = theme === 'dark' ? '☀' : '☾';
+    btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    localStorage.setItem('theme', theme);
+  }
+
+  // Apply saved theme (already set before paint by inline script, just sync the button)
+  applyTheme(html.getAttribute('data-theme') || 'light');
+
+  btn.addEventListener('click', function() {
+    applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+}
+
 // Boot
+initTheme();
 init();

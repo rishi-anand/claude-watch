@@ -14,50 +14,57 @@ type SearchResult struct {
 	Timestamp   time.Time
 }
 
+// ParseQuery converts user input into an FTS5 query string.
+//
+// Rules:
+//   - words separated by spaces → each word AND'd (find docs with all words)
+//   - comma  → AND between groups  (foo bar,baz → "foo bar" AND baz)
+//   - semicolon → OR between groups (foo;bar → foo OR bar)
+//   - hyphens normalized to spaces  (palette-agentic-cli → palette AND agentic AND cli)
 func ParseQuery(input string) string {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return ""
 	}
 
-	// Split by comma (AND)
-	andParts := strings.Split(input, ",")
-	var ftsTerms []string
-
-	for _, part := range andParts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		// Split by semicolon (OR)
-		orParts := strings.Split(part, ";")
-		if len(orParts) > 1 {
-			var orTerms []string
-			for _, op := range orParts {
-				op = strings.TrimSpace(op)
-				if op != "" {
-					orTerms = append(orTerms, quoteIfPhrase(op))
-				}
+	// OR splits (semicolon)
+	orParts := strings.Split(input, ";")
+	if len(orParts) > 1 {
+		var orTerms []string
+		for _, p := range orParts {
+			if t := buildTerms(p); t != "" {
+				orTerms = append(orTerms, t)
 			}
-			ftsTerms = append(ftsTerms, strings.Join(orTerms, " OR "))
-		} else {
-			ftsTerms = append(ftsTerms, quoteIfPhrase(part))
 		}
+		return strings.Join(orTerms, " OR ")
 	}
 
-	return strings.Join(ftsTerms, " AND ")
+	// AND splits (comma)
+	andParts := strings.Split(input, ",")
+	if len(andParts) > 1 {
+		var andTerms []string
+		for _, p := range andParts {
+			if t := buildTerms(p); t != "" {
+				andTerms = append(andTerms, t)
+			}
+		}
+		return strings.Join(andTerms, " AND ")
+	}
+
+	// Plain text: AND all words
+	return buildTerms(input)
 }
 
-func quoteIfPhrase(s string) string {
-	// FTS5 tokenizer treats hyphens as word boundaries, so normalize them to spaces.
-	// "palette-agentic-cli" → "palette agentic cli" (exact phrase match)
+// buildTerms converts a single segment into FTS5 terms.
+// Spaces and hyphens become AND operators — no phrase matching.
+func buildTerms(s string) string {
+	// Normalize hyphens (FTS5 tokenizer treats them as word separators)
 	s = strings.ReplaceAll(s, "-", " ")
-	s = strings.TrimSpace(s)
-	if strings.Contains(s, " ") {
-		return `"` + s + `"`
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
 	}
-	return s
+	return strings.Join(words, " AND ")
 }
 
 func Search(db *sql.DB, query string, page, limit int) ([]SearchResult, int, error) {

@@ -37,6 +37,7 @@ var searchTimer = null;
 // DOM refs
 var searchInput = document.getElementById('search-input');
 var searchClear = document.getElementById('search-clear');
+var searchSpinner = document.getElementById('search-spinner');
 var projectFilter = document.getElementById('project-filter');
 var convList = document.getElementById('conversation-list');
 var mainPanel = document.getElementById('main-panel');
@@ -131,19 +132,17 @@ function buildProjectFilter(conversations) {
   });
 }
 
-function loadConversation(sessionId) {
+function loadConversation(sessionId, afterLoad) {
   state.selectedSessionId = sessionId;
-  // Update sidebar selection
   var items = convList.querySelectorAll('.conv-item, .search-result');
   items.forEach(function(el) {
     el.classList.toggle('selected', el.dataset.sessionId === sessionId);
   });
 
-  // Show loading state immediately
   emptyState.hidden = true;
   sessionHeader.hidden = true;
   messageThread.hidden = false;
-  messageThread.innerHTML = '<div class="empty-state" style="height:100%;color:#555;">Loading...</div>';
+  messageThread.innerHTML = '<div class="empty-state" style="height:100%;">Loading…</div>';
   memoryPanel.hidden = true;
 
   fetch('/api/conversations/' + encodeURIComponent(sessionId))
@@ -151,10 +150,11 @@ function loadConversation(sessionId) {
     .then(function(data) {
       state.currentSession = data;
       renderSession(data);
+      if (afterLoad) afterLoad();
     })
     .catch(function(err) {
       console.error('Failed to load conversation:', err);
-      messageThread.innerHTML = '<div class="empty-state" style="height:100%;color:#555;">Failed to load conversation.</div>';
+      messageThread.innerHTML = '<div class="empty-state" style="height:100%;">Failed to load.</div>';
     });
 }
 
@@ -166,9 +166,13 @@ function search(q) {
 
 function fetchSearchResults() {
   var url = '/api/search?q=' + encodeURIComponent(state.searchQuery) + '&page=' + state.searchPage + '&limit=' + LIMIT;
+  searchSpinner.hidden = false;
+  searchClear.hidden = true;
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      searchSpinner.hidden = true;
+      searchClear.hidden = !state.searchQuery;
       if (state.searchPage === 1) {
         state.searchResults = data.results || [];
       } else {
@@ -178,6 +182,8 @@ function fetchSearchResults() {
       renderSidebar();
     })
     .catch(function(err) {
+      searchSpinner.hidden = true;
+      searchClear.hidden = !state.searchQuery;
       console.error('Search failed:', err);
     });
 }
@@ -262,14 +268,12 @@ function renderSearchResults() {
     el.addEventListener('click', function() {
       var sid = el.dataset.sessionId;
       var uuid = el.dataset.uuid;
-      loadConversation(sid);
-      // Scroll to message after load
-      if (uuid) {
-        setTimeout(function() {
+      loadConversation(sid, function() {
+        if (uuid) {
           var target = document.querySelector('[data-uuid="' + uuid + '"]');
           if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 500);
-      }
+        }
+      });
     });
   });
 

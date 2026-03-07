@@ -50,6 +50,10 @@ func ParseQuery(input string) string {
 }
 
 func quoteIfPhrase(s string) string {
+	// FTS5 tokenizer treats hyphens as word boundaries, so normalize them to spaces.
+	// "palette-agentic-cli" → "palette agentic cli" (exact phrase match)
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.TrimSpace(s)
 	if strings.Contains(s, " ") {
 		return `"` + s + `"`
 	}

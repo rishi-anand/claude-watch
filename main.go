@@ -96,6 +96,17 @@ func cmdServe() {
 		fmt.Fprintf(os.Stderr, "warning: sync: %v\n", err)
 	}
 
+	// Auto-rebuild FTS if it's out of sync with the messages table
+	var msgCount, ftsCount int
+	database.QueryRow("SELECT COUNT(*) FROM messages WHERE content_text != ''").Scan(&msgCount)
+	database.QueryRow("SELECT COUNT(*) FROM messages_fts").Scan(&ftsCount)
+	if ftsCount < msgCount {
+		fmt.Printf("Rebuilding search index (%d/%d messages indexed)...\n", ftsCount, msgCount)
+		if err := store.RebuildFTS(database); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: rebuild FTS: %v\n", err)
+		}
+	}
+
 	var count int
 	database.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&count)
 	fmt.Printf("Indexed %d sessions\n", count)

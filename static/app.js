@@ -312,7 +312,7 @@ function renderSession(data) {
   if (session.slug) {
     headerHtml += '<span class="sh-id">' + escapeHtml(session.slug) + '</span>';
   }
-  headerHtml += '<span class="sh-id">' + escapeHtml((session.sessionId || '').substring(0, 8)) + '…'
+  headerHtml += '<span class="sh-id">' + escapeHtml(session.sessionId || '')
     + '<button class="sh-copy-btn" id="copy-sid-btn">Copy ID</button></span>';
   if (session.gitBranch) {
     headerHtml += '<span class="sh-branch">' + escapeHtml(session.gitBranch) + '</span>';

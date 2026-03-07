@@ -47,22 +47,24 @@ After confirming, the browser opens at `http://localhost:7823` and all your exis
 ## Features
 
 - **Full history preservation** — captures every session in real time, survives compaction
-- **Fast full-text search** — SQLite FTS5, supports AND / OR / phrase operators
+- **Fast full-text search** — SQLite FTS5, all words must match (implicit AND)
 - **Rich conversation view** — renders markdown, tool calls, tool results, compaction markers
 - **Project filter** — browse sessions by project
+- **Dark/light theme** — toggle in the header, preference saved across sessions
 - **Zero dependencies** — single static binary, no CGO, no Docker, no database server
 - **Transparent setup** — shows exactly what will be written before touching any config
 
 ---
 
-## Search syntax
+## Search
 
-| Query | Meaning |
+Type words to search — all words must match. Hyphens and apostrophes are treated as word separators.
+
+| Query | Matches |
 |-------|---------|
-| `ssh tunnel` | Exact phrase |
-| `ssh,tunnel` | Both terms (AND) |
-| `ssh;tunnel` | Either term (OR) |
-| `refactor,tests;ci` | `refactor` AND (`tests` OR `ci`) |
+| `ssh tunnel` | messages containing both "ssh" and "tunnel" |
+| `palette-agentic-cli` | messages containing "palette", "agentic", and "cli" |
+| `Cloud's` | messages containing "Cloud" |
 
 ---
 

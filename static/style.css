@@ -405,9 +405,18 @@ html, body {
   border-bottom: none;
 }
 
-/* Subtle alternating tint: user messages slightly warmer */
+/* User messages: warm amber tint */
 .msg-user {
-  background: #fdfcf9;
+  background: #fffbf0;
+  margin-left: -24px;
+  margin-right: -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Assistant messages: cool lavender tint */
+.msg-assistant {
+  background: #f8f7ff;
   margin-left: -24px;
   margin-right: -24px;
   padding-left: 24px;

@@ -1,17 +1,17 @@
 // claude-watch frontend
 
 var PROJECT_COLORS = {
-  'claude-watch':        { bg: '#fff3cd', text: '#92400e', dot: '#d97706' },
-  'palette-agentic-cli': { bg: '#d1fae5', text: '#065f46', dot: '#059669' },
-  'teams':               { bg: '#ede9fe', text: '#4c1d95', dot: '#7c3aed' },
-  'spectre':             { bg: '#cffafe', text: '#164e63', dot: '#0891b2' },
-  'teams-bdd':           { bg: '#ffe4e6', text: '#881337', dot: '#e11d48' },
-  'rishi':               { bg: '#dbeafe', text: '#1e3a8a', dot: '#2563eb' },
-  'spectre-tui':         { bg: '#cffafe', text: '#164e63', dot: '#0891b2' },
-  'stylus':              { bg: '#ffedd5', text: '#7c2d12', dot: '#ea580c' },
-  'vmo-manager':         { bg: '#ecfccb', text: '#365314', dot: '#65a30d' },
+  'claude-watch':        { bg: '#f5eddb', text: '#7a4f1a', dot: '#b07830' },
+  'palette-agentic-cli': { bg: '#dceee6', text: '#2d5c44', dot: '#4a9070' },
+  'teams':               { bg: '#e8e4f4', text: '#3d2870', dot: '#6b52b0' },
+  'spectre':             { bg: '#daeef2', text: '#1a4d5c', dot: '#3a8098' },
+  'teams-bdd':           { bg: '#f2dde0', text: '#6b2030', dot: '#a84050' },
+  'rishi':               { bg: '#dce8f5', text: '#1c3a6a', dot: '#3a6aaa' },
+  'spectre-tui':         { bg: '#daeef2', text: '#1a4d5c', dot: '#3a8098' },
+  'stylus':              { bg: '#f2e6d8', text: '#6a2c10', dot: '#b05030' },
+  'vmo-manager':         { bg: '#e4f0d8', text: '#2e4e1a', dot: '#5a8a30' },
 };
-var DEFAULT_PROJECT_COLOR = { bg: '#f3f4f6', text: '#374151', dot: '#6b7280' };
+var DEFAULT_PROJECT_COLOR = { bg: '#e8e8ea', text: '#4a4a54', dot: '#7a7a88' };
 
 function getProjectColor(name) {
   return PROJECT_COLORS[name] || DEFAULT_PROJECT_COLOR;

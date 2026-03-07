@@ -36,29 +36,29 @@
 }
 
 [data-theme="dark"] {
-  --bg-app:      #0f0f0f;
-  --bg-surface:  #141414;
-  --bg-panel:    #111111;
-  --bg-subtle:   #1a1a1a;
-  --bg-hover:    #1e1e1e;
-  --bg-selected: #252520;
+  --bg-app:      #1c1c1e;
+  --bg-surface:  #242426;
+  --bg-panel:    #1e1e20;
+  --bg-subtle:   #2a2a2d;
+  --bg-hover:    #2e2e31;
+  --bg-selected: #2e2b22;
 
-  --border:       #2a2a2a;
-  --border-light: #222222;
-  --border-input: #333333;
+  --border:       #35353a;
+  --border-light: #2d2d31;
+  --border-input: #3d3d42;
   --border-focus: #d97706;
 
-  --text:       #e0e0e0;
-  --text-2:     #b0b0b0;
-  --text-muted: #888888;
-  --text-faint: #555555;
+  --text:       #e2e2e4;
+  --text-2:     #b4b4b8;
+  --text-muted: #8a8a90;
+  --text-faint: #5a5a62;
 
   --accent:          #d4860a;
   --accent-light:    #e6a020;
-  --accent-bg:       #1a1400;
-  --accent-badge-bg: #2a1d00;
-  --accent-badge-tx: #e6a020;
-  --accent-border:   #4a3000;
+  --accent-bg:       #1e1a0e;
+  --accent-badge-bg: #2a2010;
+  --accent-badge-tx: #d4a044;
+  --accent-border:   #4a3800;
 }
 
 html, body {
@@ -634,11 +634,11 @@ html, body {
 
 /* ── Dark theme message tints ── */
 [data-theme="dark"] .msg-user {
-  background: #141008;
+  background: #201e18;
 }
 
 [data-theme="dark"] .msg-assistant {
-  background: #0f0f16;
+  background: #1c1c24;
 }
 
 [data-theme="dark"] .search-hint code {

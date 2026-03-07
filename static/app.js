@@ -25,6 +25,7 @@ var state = {
   currentSession: null,
   searchQuery: '',
   searchResults: [],
+  searching: false,
   page: 1,
   totalConversations: 0,
   searchPage: 1,
@@ -76,8 +77,10 @@ function init() {
   searchClear.addEventListener('click', function() {
     searchInput.value = '';
     searchClear.hidden = true;
+    searchSpinner.hidden = true;
     state.searchQuery = '';
     state.searchResults = [];
+    state.searching = false;
     renderSidebar();
   });
 
@@ -132,7 +135,7 @@ function buildProjectFilter(conversations) {
   });
 }
 
-function loadConversation(sessionId, afterLoad) {
+function loadConversation(sessionId, scrollToUuid) {
   state.selectedSessionId = sessionId;
   var items = convList.querySelectorAll('.conv-item, .search-result');
   items.forEach(function(el) {
@@ -149,8 +152,7 @@ function loadConversation(sessionId, afterLoad) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       state.currentSession = data;
-      renderSession(data);
-      if (afterLoad) afterLoad();
+      renderSession(data, scrollToUuid);
     })
     .catch(function(err) {
       console.error('Failed to load conversation:', err);
@@ -161,6 +163,9 @@ function loadConversation(sessionId, afterLoad) {
 function search(q) {
   state.searchQuery = q;
   state.searchPage = 1;
+  state.searchResults = [];
+  state.searching = true;
+  renderSidebar(); // show loading state immediately
   fetchSearchResults();
 }
 
@@ -173,6 +178,7 @@ function fetchSearchResults() {
     .then(function(data) {
       searchSpinner.hidden = true;
       searchClear.hidden = !state.searchQuery;
+      state.searching = false;
       if (state.searchPage === 1) {
         state.searchResults = data.results || [];
       } else {
@@ -184,6 +190,8 @@ function fetchSearchResults() {
     .catch(function(err) {
       searchSpinner.hidden = true;
       searchClear.hidden = !state.searchQuery;
+      state.searching = false;
+      renderSidebar();
       console.error('Search failed:', err);
     });
 }
@@ -258,22 +266,17 @@ function renderSearchResults() {
     html += '<div class="load-more"><button id="load-more-search-btn">Load more</button></div>';
   }
 
-  if (!state.searchResults.length) {
-    html = '<div class="empty-state" style="padding:20px;color:#555;">No results</div>';
+  if (state.searching) {
+    html = '<div class="sidebar-loading"><div class="sidebar-spinner"></div></div>';
+  } else if (!state.searchResults.length) {
+    html = '<div class="empty-state" style="padding:20px;">No results</div>';
   }
 
   convList.innerHTML = html;
 
   convList.querySelectorAll('.search-result').forEach(function(el) {
     el.addEventListener('click', function() {
-      var sid = el.dataset.sessionId;
-      var uuid = el.dataset.uuid;
-      loadConversation(sid, function() {
-        if (uuid) {
-          var target = document.querySelector('[data-uuid="' + uuid + '"]');
-          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      });
+      loadConversation(el.dataset.sessionId, el.dataset.uuid);
     });
   });
 
@@ -287,20 +290,17 @@ function renderSearchResults() {
 }
 
 function highlightSnippet(text) {
-  // The API might return snippet with <mark> tags already, or we do it client-side
-  if (text.indexOf('<mark>') !== -1) return text;
-  var escaped = escapeHtml(text);
-  if (!state.searchQuery) return escaped;
-  // Simple highlight: split query on , and ; and space for highlighting
-  var terms = state.searchQuery.replace(/[,;]/g, ' ').split(/\s+/).filter(Boolean);
-  terms.forEach(function(term) {
-    var re = new RegExp('(' + escapeRegex(term) + ')', 'gi');
-    escaped = escaped.replace(re, '<mark>$1</mark>');
-  });
-  return escaped;
+  if (!text) return '';
+  // Escape all HTML, then restore only <mark>/<\/mark> that the backend inserted.
+  // This prevents raw < > from message content breaking the DOM.
+  var parts = text.split(/(<mark>|<\/mark>)/);
+  return parts.map(function(p) {
+    if (p === '<mark>' || p === '</mark>') return p;
+    return escapeHtml(p);
+  }).join('');
 }
 
-function renderSession(data) {
+function renderSession(data, scrollToUuid) {
   var session = data.session || {};
   var messages = data.messages || [];
   var memoryMd = data.memoryMd || '';
@@ -342,7 +342,7 @@ function renderSession(data) {
   });
 
   // Messages
-  renderMessages(messages);
+  renderMessages(messages, scrollToUuid);
 
   // Memory
   if (memoryMd) {
@@ -354,12 +354,22 @@ function renderSession(data) {
   }
 }
 
-function renderMessages(messages) {
+function renderMessages(messages, scrollToUuid) {
   var html = '';
   messages.forEach(function(msg) {
     html += renderMessage(msg);
   });
   messageThread.innerHTML = html;
+
+  if (scrollToUuid) {
+    var target = messageThread.querySelector('[data-uuid="' + scrollToUuid + '"]');
+    if (target) {
+      target.scrollIntoView({ block: 'center' });
+      target.classList.add('msg-highlight');
+      setTimeout(function() { target.classList.remove('msg-highlight'); }, 2000);
+      return;
+    }
+  }
   messageThread.scrollTop = 0;
 }
 

@@ -15,43 +15,13 @@ type SearchResult struct {
 }
 
 // ParseQuery converts user input into an FTS5 query string.
-//
-// Rules:
-//   - words separated by spaces → each word AND'd (find docs with all words)
-//   - comma  → AND between groups  (foo bar,baz → "foo bar" AND baz)
-//   - semicolon → OR between groups (foo;bar → foo OR bar)
-//   - hyphens normalized to spaces  (palette-agentic-cli → palette AND agentic AND cli)
+// All words are AND'd together; hyphens and apostrophes are treated as word separators.
+// Example: "palette-agentic-cli" → "palette AND agentic AND cli"
 func ParseQuery(input string) string {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return ""
 	}
-
-	// OR splits (semicolon)
-	orParts := strings.Split(input, ";")
-	if len(orParts) > 1 {
-		var orTerms []string
-		for _, p := range orParts {
-			if t := buildTerms(p); t != "" {
-				orTerms = append(orTerms, t)
-			}
-		}
-		return strings.Join(orTerms, " OR ")
-	}
-
-	// AND splits (comma)
-	andParts := strings.Split(input, ",")
-	if len(andParts) > 1 {
-		var andTerms []string
-		for _, p := range andParts {
-			if t := buildTerms(p); t != "" {
-				andTerms = append(andTerms, t)
-			}
-		}
-		return strings.Join(andTerms, " AND ")
-	}
-
-	// Plain text: AND all words
 	return buildTerms(input)
 }
 

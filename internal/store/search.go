@@ -56,15 +56,46 @@ func ParseQuery(input string) string {
 }
 
 // buildTerms converts a single segment into FTS5 terms.
-// Spaces and hyphens become AND operators — no phrase matching.
+// Spaces, hyphens, and apostrophes become word separators — no phrase matching.
 func buildTerms(s string) string {
-	// Normalize hyphens (FTS5 tokenizer treats them as word separators)
+	// Normalize characters that the FTS5 tokenizer treats as word separators.
+	// Apostrophes are word-split (e.g. "Cloud's" → "Cloud" AND "s") so that
+	// the main root word ("Cloud") still matches its FTS5 token.
 	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, "'", " ")
+	s = strings.ReplaceAll(s, "'", " ") // unicode right single quote
+	s = strings.ReplaceAll(s, "'", " ") // unicode left single quote
 	words := strings.Fields(s)
 	if len(words) == 0 {
 		return ""
 	}
-	return strings.Join(words, " AND ")
+	var terms []string
+	for _, w := range words {
+		w = sanitizeFTS5Word(w)
+		if w != "" {
+			terms = append(terms, w)
+		}
+	}
+	if len(terms) == 0 {
+		return ""
+	}
+	return strings.Join(terms, " AND ")
+}
+
+// sanitizeFTS5Word removes characters that would break an FTS5 bare-term query.
+// After apostrophe/hyphen splitting, the only remaining dangerous chars are
+// FTS5 operators and delimiters: " ( ) * ^ : \
+func sanitizeFTS5Word(w string) string {
+	var sb strings.Builder
+	for _, ch := range w {
+		switch ch {
+		case '"', '(', ')', '*', '^', ':', '\\':
+			// skip — these break FTS5 bare-term syntax
+		default:
+			sb.WriteRune(ch)
+		}
+	}
+	return sb.String()
 }
 
 func Search(db *sql.DB, query string, page, limit int) ([]SearchResult, int, error) {

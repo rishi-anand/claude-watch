@@ -7,7 +7,7 @@
 
 > Browse, search, and **permanently preserve** your Claude Code conversation history.
 
-Claude Code natively compacts context — summarizing and discarding old messages to free up token space. Once compacted, that history is gone. **claude-watch** captures every conversation in real time via [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) and stores it in plain Markdown files and a searchable SQLite index, so nothing is ever lost.
+Claude Code natively compacts context — summarizing and discarding old messages to free up token space. Once compacted, that history is gone. **claude-watch** captures every conversation in real time via [Claude Code hooks](https://code.claude.com/docs/en/hooks) and stores it in plain Markdown files and a searchable SQLite index, so nothing is ever lost.
 
 ---
 
@@ -70,7 +70,7 @@ Type words to search — all words must match. Hyphens and apostrophes are treat
 
 ## How it works
 
-claude-watch uses [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) — shell scripts that Claude Code invokes at key points in a conversation. Each hook calls the `claude-watch` CLI directly (no server required):
+claude-watch uses [Claude Code hooks](https://code.claude.com/docs/en/hooks) — shell scripts that Claude Code invokes at key points in a conversation. Each hook calls the `claude-watch` CLI directly (no server required):
 
 ```bash
 cat | claude-watch hook stop

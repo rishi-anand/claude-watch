@@ -354,16 +354,54 @@ function renderSession(data, scrollToUuid) {
   }
 }
 
+// Messages that are always visible and break up work segments.
+function isAnchorMessage(msg) {
+  var type = msg.msgType || msg.role || '';
+  if (type === 'compact_boundary' || type === 'compact_summary') return true;
+  if (type !== 'user') return false;
+  // User message must have actual typed text (not just tool results)
+  var blocks = [];
+  if (msg.contentJson) { try { blocks = JSON.parse(msg.contentJson); } catch(e) {} }
+  if (blocks.length === 0) return !!msg.contentText;
+  return blocks.some(function(b) { return b.type === 'text' && b.text; });
+}
+
 function renderMessages(messages, scrollToUuid) {
-  var html = '';
+  // Split messages into anchor messages (user text, compaction markers) and
+  // work segments (everything in between — tool calls, tool results, internal turns).
+  var segments = [];
+  var work = [];
+
   messages.forEach(function(msg) {
-    html += renderMessage(msg);
+    if (isAnchorMessage(msg)) {
+      if (work.length) { segments.push({ type: 'work', messages: work }); work = []; }
+      segments.push({ type: 'anchor', msg: msg });
+    } else {
+      work.push(msg);
+    }
   });
+  if (work.length) segments.push({ type: 'work', messages: work });
+
+  var html = '';
+  segments.forEach(function(seg) {
+    if (seg.type === 'anchor') {
+      html += renderMessage(seg.msg);
+    } else {
+      html += renderWorkSegment(seg.messages);
+    }
+  });
+
   messageThread.innerHTML = html;
 
   if (scrollToUuid) {
     var target = messageThread.querySelector('[data-uuid="' + scrollToUuid + '"]');
     if (target) {
+      // Open any parent <details> so the target is visible
+      var el = target;
+      while (el && el !== messageThread) {
+        if (el.tagName === 'DETAILS') el.open = true;
+        el = el.parentElement;
+      }
       target.scrollIntoView({ block: 'center' });
       target.classList.add('msg-highlight');
       setTimeout(function() { target.classList.remove('msg-highlight'); }, 2000);
@@ -371,6 +409,26 @@ function renderMessages(messages, scrollToUuid) {
     }
   }
   messageThread.scrollTop = 0;
+}
+
+function renderWorkSegment(messages) {
+  var toolCallCount = 0;
+  var msgHtml = '';
+  messages.forEach(function(msg) {
+    msgHtml += renderMessage(msg);
+    var blocks = [];
+    if (msg.contentJson) { try { blocks = JSON.parse(msg.contentJson); } catch(e) {} }
+    blocks.forEach(function(b) { if (b.type === 'tool_use') toolCallCount++; });
+  });
+
+  var steps = messages.length;
+  var label = steps + ' step' + (steps !== 1 ? 's' : '');
+  if (toolCallCount > 0) label += ' &middot; ' + toolCallCount + ' tool call' + (toolCallCount !== 1 ? 's' : '');
+
+  return '<details class="work-segment">'
+    + '<summary><span class="work-segment-badge">&#x2699; ' + label + '</span></summary>'
+    + '<div class="work-segment-body">' + msgHtml + '</div>'
+    + '</details>';
 }
 
 function renderMessage(msg) {

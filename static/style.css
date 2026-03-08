@@ -661,6 +661,63 @@ html, body {
   border-left: 2px solid var(--border-light);
 }
 
+/* ── Work segment (collapsed tool-chain between user messages) ── */
+.work-segment {
+  margin: 2px 0;
+}
+
+.work-segment > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.work-segment > summary::-webkit-details-marker { display: none; }
+
+.work-segment > summary::before,
+.work-segment > summary::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+}
+
+.work-segment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.work-segment > summary:hover .work-segment-badge {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.work-segment[open] > summary .work-segment-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.work-segment-body {
+  border-left: 2px solid var(--border-light);
+  margin: 4px 0 4px 20px;
+  padding: 4px 0;
+}
+
 /* ── Tool result row (collapsed user→tool plumbing messages) ── */
 .tool-result-row {
   margin: 0;

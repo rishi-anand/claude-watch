@@ -16,7 +16,7 @@ Claude Code natively compacts context — summarizing and discarding old message
 **1. Install**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rishi-anand/claude-watch/main/install.sh | bash
+curl -fsSL https://github.com/rishi-anand/claude-watch/releases/latest/download/install.sh | bash
 ```
 
 Detects your OS and architecture (macOS/Linux, amd64/arm64) and installs to `~/.local/bin/claude-watch`.

@@ -24,13 +24,15 @@ dist:
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/claude-watch-linux-amd64   .
 	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/claude-watch-linux-arm64   .
 
-# Build dist/ then create a GitHub release
+# Build dist/ then create a GitHub release (install.sh included so the
+# README curl URL always points to the latest release)
 release: dist
 	gh release create $(VERSION) \
 		dist/claude-watch-darwin-amd64 \
 		dist/claude-watch-darwin-arm64 \
 		dist/claude-watch-linux-amd64  \
 		dist/claude-watch-linux-arm64  \
+		install.sh \
 		--title "$(VERSION)" \
 		--notes "Release $(VERSION)"
 

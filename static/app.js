@@ -382,6 +382,8 @@ function renderMessages(messages, scrollToUuid) {
   });
   if (work.length) segments.push({ type: 'work', messages: work });
 
+  segments.reverse();
+
   var html = '';
   segments.forEach(function(seg) {
     if (seg.type === 'anchor') {

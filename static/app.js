@@ -410,52 +410,72 @@ function renderMessage(msg) {
 
   var ts = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
 
-  // Parse content blocks from contentJson (full fidelity) or fall back to contentText
+  // Parse content blocks
   var blocks = [];
   if (msg.contentJson) {
     try { blocks = JSON.parse(msg.contentJson); } catch(e) {}
+  }
+
+  // Categorise blocks
+  var textBlocks = [];
+  var toolUseBlocks = [];
+  var toolResultBlocks = [];
+  blocks.forEach(function(b) {
+    if (b.type === 'text' && b.text)  textBlocks.push(b);
+    else if (b.type === 'tool_use')   toolUseBlocks.push(b);
+    else if (b.type === 'tool_result') toolResultBlocks.push(b);
+  });
+
+  // User messages that contain ONLY tool results are tool-exchange plumbing,
+  // not something the user typed. Render them as a small collapsible row.
+  if (type === 'user' && blocks.length > 0 && textBlocks.length === 0 && toolResultBlocks.length > 0) {
+    return renderToolResultRow(msg, toolResultBlocks, ts);
   }
 
   var textHtml = '';
   var toolHtml = '';
 
   if (blocks.length > 0) {
-    // Render each block by type
-    blocks.forEach(function(block) {
-      if (block.type === 'text' && block.text) {
-        textHtml += '<div class="msg-content">' + renderMarkdown(block.text) + '</div>';
-      } else if (block.type === 'tool_use') {
-        var inputStr = '';
-        try { inputStr = JSON.stringify(block.input, null, 2); } catch(e) { inputStr = String(block.input); }
-        toolHtml += '<details class="tool-use">'
-          + '<summary>&#x25B6; Tool: <strong>' + escapeHtml(block.name || 'unknown') + '</strong></summary>'
-          + '<pre><code>' + escapeHtml(inputStr) + '</code></pre>'
+    textBlocks.forEach(function(b) {
+      textHtml += '<div class="msg-content">' + renderMarkdown(b.text) + '</div>';
+    });
+    toolUseBlocks.forEach(function(b) {
+      var inputStr = '';
+      try { inputStr = JSON.stringify(b.input, null, 2); } catch(e) { inputStr = String(b.input); }
+      toolHtml += '<details class="tool-use">'
+        + '<summary>&#x25B6; Tool: <strong>' + escapeHtml(b.name || 'unknown') + '</strong></summary>'
+        + '<pre><code>' + escapeHtml(inputStr) + '</code></pre>'
+        + '</details>';
+    });
+    toolResultBlocks.forEach(function(b) {
+      var rc = '';
+      if (Array.isArray(b.content)) b.content.forEach(function(c) { if (c.type === 'text') rc += c.text; });
+      else if (typeof b.content === 'string') rc = b.content;
+      if (rc) {
+        toolHtml += '<details class="tool-result">'
+          + '<summary>&#x25C0; Tool result</summary>'
+          + '<pre><code>' + escapeHtml(rc.substring(0, 4000)) + (rc.length > 4000 ? '\n… (truncated)' : '') + '</code></pre>'
           + '</details>';
-      } else if (block.type === 'tool_result') {
-        var resultContent = '';
-        if (Array.isArray(block.content)) {
-          block.content.forEach(function(c) {
-            if (c.type === 'text') resultContent += c.text;
-          });
-        } else if (typeof block.content === 'string') {
-          resultContent = block.content;
-        }
-        if (resultContent) {
-          toolHtml += '<details class="tool-result">'
-            + '<summary>&#x25C0; Tool result</summary>'
-            + '<pre><code>' + escapeHtml(resultContent.substring(0, 4000)) + (resultContent.length > 4000 ? '\n… (truncated)' : '') + '</code></pre>'
-            + '</details>';
-        }
       }
     });
   } else if (msg.contentText) {
-    // Fallback: plain text
     textHtml = '<div class="msg-content">' + renderMarkdown(msg.contentText) + '</div>';
   }
 
-  // If nothing to show, still render the message label
   if (!textHtml && !toolHtml) {
     textHtml = '<div class="msg-content msg-empty">(no text content)</div>';
+  }
+
+  // For assistant messages: wrap tool calls in a single collapsible section
+  var toolSection = '';
+  if (type === 'assistant' && toolHtml) {
+    var n = toolUseBlocks.length;
+    var label = n > 0 ? n + ' tool call' + (n !== 1 ? 's' : '') : 'tool details';
+    toolSection = '<details class="tool-calls-section">'
+      + '<summary>' + label + '</summary>'
+      + '<div class="tool-calls-body">' + toolHtml + '</div>'
+      + '</details>';
+    toolHtml = '';
   }
 
   return '<div class="' + msgClass + '" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
@@ -463,9 +483,31 @@ function renderMessage(msg) {
     + '<div class="msg-body">'
     + '<div class="msg-label"><span class="role ' + roleClass + '">' + roleLabel + '</span><span class="ts">' + ts + '</span></div>'
     + textHtml
+    + toolSection
     + toolHtml
     + '</div>'
     + '</div>';
+}
+
+function renderToolResultRow(msg, blocks, ts) {
+  var n = blocks.length;
+  var contentHtml = '';
+  blocks.forEach(function(b) {
+    var rc = '';
+    if (Array.isArray(b.content)) b.content.forEach(function(c) { if (c.type === 'text') rc += c.text; });
+    else if (typeof b.content === 'string') rc = b.content;
+    if (rc) {
+      contentHtml += '<pre><code>' + escapeHtml(rc.substring(0, 4000))
+        + (rc.length > 4000 ? '\n… (truncated)' : '') + '</code></pre>';
+    }
+  });
+  return '<details class="tool-result-row" data-uuid="' + escapeAttr(msg.uuid || '') + '">'
+    + '<summary>'
+    + '<span class="tool-result-label">&#x25B6; ' + n + ' tool result' + (n !== 1 ? 's' : '') + '</span>'
+    + '<span class="ts">' + ts + '</span>'
+    + '</summary>'
+    + '<div class="tool-result-row-body">' + contentHtml + '</div>'
+    + '</details>';
 }
 
 function renderCompactBoundary(msg) {

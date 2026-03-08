@@ -621,6 +621,90 @@ html, body {
   100% { outline: 2px solid transparent; }
 }
 
+/* ── Assistant tool-calls collapsible section ── */
+.tool-calls-section {
+  margin: 8px 0 2px;
+}
+
+.tool-calls-section > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  list-style: none;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tool-calls-section > summary::-webkit-details-marker { display: none; }
+
+.tool-calls-section > summary::before {
+  content: '▶';
+  font-size: 7px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.tool-calls-section[open] > summary::before { transform: rotate(90deg); }
+.tool-calls-section > summary:hover { background: var(--bg-hover); color: var(--text); }
+
+.tool-calls-body {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--border-light);
+}
+
+/* ── Tool result row (collapsed user→tool plumbing messages) ── */
+.tool-result-row {
+  margin: 0;
+  padding: 0 0 0 56px;  /* align with message body (avatar 36px + gap) */
+}
+
+.tool-result-row > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.tool-result-row > summary::-webkit-details-marker { display: none; }
+
+.tool-result-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  transition: color 0.12s;
+}
+
+.tool-result-row > summary:hover .tool-result-label { color: var(--text-muted); }
+
+.tool-result-row-body {
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid var(--border-light);
+  margin: 2px 0 6px;
+}
+
+.tool-result-row-body pre {
+  background: var(--bg-subtle);
+  padding: 8px;
+  overflow-x: auto;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+}
+
 /* ── Tool blocks ── */
 .tool-use, .tool-result {
   margin: 6px 0;

@@ -52,12 +52,14 @@ func (c ContentValue) MarshalJSON() ([]byte, error) {
 }
 
 type ContentBlock struct {
-	Type    string          `json:"type"`
-	Text    string          `json:"text,omitempty"`
-	ID      string          `json:"id,omitempty"`
-	Name    string          `json:"name,omitempty"`
-	Input   json.RawMessage `json:"input,omitempty"`
-	Content json.RawMessage `json:"content,omitempty"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	ToolName  string          `json:"tool_name,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
 }
 
 type Session struct {

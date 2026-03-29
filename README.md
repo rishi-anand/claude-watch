@@ -1,11 +1,10 @@
-```
- ▗▄▄▖▗▖    ▗▄▖ ▗▖ ▗▖▗▄▄▄ ▗▄▄▄▖    ▗▖ ▗▖ ▗▄▖▗▄▄▄▖▗▄▄▖▗▖ ▗▖
-▐▌   ▐▌   ▐▌ ▐▌▐▌ ▐▌▐▌  █▐▌       ▐▌ ▐▌▐▌ ▐▌ █ ▐▌   ▐▌ ▐▌
-▐▌   ▐▌   ▐▛▀▜▌▐▌ ▐▌▐▌  █▐▛▀▀▘    ▐▌ ▐▌▐▛▀▜▌ █ ▐▌   ▐▛▀▜▌
-▝▚▄▄▖▐▙▄▄▖▐▌ ▐▌▝▚▄▞▘▐▙▄▄▀▐▙▄▄▖    ▐▙█▟▌▐▌ ▐▌ █ ▝▚▄▄▖▐▌ ▐▌
-```
+<p align="center">
+  <img src="static/logo.png" alt="claude-watch logo" width="200"/>
+</p>
 
-> Browse, search, and **permanently preserve** your Claude Code conversation history.
+<h1 align="center">claude-watch</h1>
+
+<p align="center">Browse, search, and <b>permanently preserve</b> your Claude Code conversation history.</p>
 
 Claude Code natively compacts context — summarizing and discarding old messages to free up token space. Once compacted, that history is gone. **claude-watch** captures every conversation in real time via [Claude Code hooks](https://code.claude.com/docs/en/hooks) and stores it in plain Markdown files and a searchable SQLite index, so nothing is ever lost.
 

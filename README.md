@@ -174,6 +174,39 @@ Summary of findings...
 ```
 ```
 
+### `search` — Search conversation content (uses SQLite index)
+
+Full-text search across every captured conversation. Uses the same FTS5 index as the web UI, so results match. All words must match (implicit AND); hyphens and apostrophes are word separators.
+
+```bash
+# Table output — conversation id and matching text
+claude-watch search "ssh tunnel"
+
+# Scope to a repo
+claude-watch search "airgapped cluster" --repo /path/to/your/project
+
+# Scope to a single session
+claude-watch search "compact boundary" --session-id <session-id>
+
+# Pagination
+claude-watch search "foo" --page 2 --limit 20
+
+# JSON output (for scripting)
+claude-watch search "kubevirt" --json | jq '.results[]'
+```
+
+**Example output:**
+```
+CONVERSATION ID                       MATCH
+------------------------------------  -----
+83d192d6-e704-4975-b650-450aa2264072  ...I have tried to search this conversation. This is a user prompt...
+b1c29a16-04b0-46c7-87d6-3f9bed8e996a  ...now let me get conversation detail and run search tests.
+
+Showing 2 of 137 matches (page 1, limit 50)
+```
+
+Matches are highlighted with ANSI colors in the terminal; the JSON variant strips highlight markers.
+
 ### `hook` — Real-time sync via Claude Code hooks
 
 Processes hook events from Claude Code to sync conversations in real time. Hook scripts are installed automatically on first `serve`.

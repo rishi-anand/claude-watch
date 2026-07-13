@@ -50,6 +50,8 @@ func main() {
 		cmdList()
 	case "export":
 		cmdExport()
+	case "search":
+		cmdSearch()
 	default:
 		printUsage()
 		os.Exit(1)
@@ -63,6 +65,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  rebuild   Force rebuild SQLite index")
 	fmt.Fprintln(os.Stderr, "  list      List sessions (reads JSONL directly, no SQLite)")
 	fmt.Fprintln(os.Stderr, "  export    Export session to detailed markdown (no SQLite)")
+	fmt.Fprintln(os.Stderr, "  search    Search conversation content across sessions (no SQLite)")
 }
 
 func cmdServe() {
@@ -497,6 +500,162 @@ func cmdExport() {
 	} else {
 		fmt.Print(md)
 	}
+}
+
+func cmdSearch() {
+	cfg := config.Load()
+	setup.LoadSaved(cfg)
+
+	var repoPath, sessionID string
+	var jsonOutput bool
+	var page = 1
+	var limit = 50
+	var queryParts []string
+	for i := 2; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--repo":
+			if i+1 < len(os.Args) {
+				i++
+				repoPath = os.Args[i]
+			}
+		case "--session-id":
+			if i+1 < len(os.Args) {
+				i++
+				sessionID = os.Args[i]
+			}
+		case "--json":
+			jsonOutput = true
+		case "--page":
+			if i+1 < len(os.Args) {
+				i++
+				if n, err := strconv.Atoi(os.Args[i]); err == nil && n > 0 {
+					page = n
+				}
+			}
+		case "--limit":
+			if i+1 < len(os.Args) {
+				i++
+				if n, err := strconv.Atoi(os.Args[i]); err == nil && n > 0 {
+					limit = n
+				}
+			}
+		default:
+			if strings.HasPrefix(os.Args[i], "--") {
+				continue
+			}
+			queryParts = append(queryParts, os.Args[i])
+		}
+	}
+
+	if len(queryParts) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: claude-watch search <query> [--repo <path>] [--session-id <id>] [--page <n>] [--limit <n>] [--json]")
+		os.Exit(1)
+	}
+	query := strings.Join(queryParts, " ")
+
+	// Open the SQLite index (same one the UI uses)
+	database, err := db.Open(cfg.DBPath())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: open database: %v\n", err)
+		fmt.Fprintln(os.Stderr, "hint: run `claude-watch serve` once, or `claude-watch rebuild` to build the index.")
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	results, total, err := store.Search(database, query, page, limit)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: search: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Optional filtering (session ID / repo project name) applied post-query
+	// so we still benefit from the FTS5 index for the heavy lifting.
+	var projectFilter string
+	if repoPath != "" {
+		abs, err := filepath.Abs(repoPath)
+		if err == nil {
+			projectFilter = claude.ProjectNameFromCWD(abs)
+		}
+	}
+
+	type hitJSON struct {
+		SessionID   string `json:"session_id"`
+		Project     string `json:"project"`
+		UUID        string `json:"uuid"`
+		Timestamp   string `json:"timestamp"`
+		Snippet     string `json:"snippet"`
+	}
+
+	var kept []store.SearchResult
+	for _, r := range results {
+		if sessionID != "" && r.SessionID != sessionID {
+			continue
+		}
+		if projectFilter != "" && r.ProjectName != projectFilter {
+			continue
+		}
+		kept = append(kept, r)
+	}
+
+	if jsonOutput {
+		out := struct {
+			Query   string    `json:"query"`
+			Total   int       `json:"total"`
+			Page    int       `json:"page"`
+			Limit   int       `json:"limit"`
+			Results []hitJSON `json:"results"`
+		}{
+			Query: query,
+			Total: total,
+			Page:  page,
+			Limit: limit,
+		}
+		for _, r := range kept {
+			out.Results = append(out.Results, hitJSON{
+				SessionID: r.SessionID,
+				Project:   r.ProjectName,
+				UUID:      r.MsgUUID,
+				Timestamp: r.Timestamp.UTC().Format(time.RFC3339),
+				Snippet:   stripMarkTags(r.Snippet),
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(out)
+		return
+	}
+
+	if len(kept) == 0 {
+		fmt.Fprintln(os.Stderr, "No matches.")
+		os.Exit(0)
+	}
+
+	// Table output: conversation id | text
+	const idW = 36
+	fmt.Printf("%-*s  %s\n", idW, "CONVERSATION ID", "MATCH")
+	fmt.Printf("%s  %s\n", strings.Repeat("-", idW), strings.Repeat("-", 5))
+	for _, r := range kept {
+		fmt.Printf("%-*s  %s\n", idW, r.SessionID, renderSnippetForTerminal(r.Snippet))
+	}
+	fmt.Fprintf(os.Stderr, "\nShowing %d of %d matches (page %d, limit %d)\n", len(kept), total, page, limit)
+}
+
+// stripMarkTags removes the <mark>...</mark> highlight markers produced by
+// SQLite FTS5 `snippet()` — used when emitting JSON.
+func stripMarkTags(s string) string {
+	s = strings.ReplaceAll(s, "<mark>", "")
+	s = strings.ReplaceAll(s, "</mark>", "")
+	return s
+}
+
+// renderSnippetForTerminal replaces <mark> tags with ANSI bold/color so
+// matches stand out in the terminal, and collapses whitespace to one line.
+func renderSnippetForTerminal(s string) string {
+	s = strings.ReplaceAll(s, "<mark>", "\x1b[1;33m")
+	s = strings.ReplaceAll(s, "</mark>", "\x1b[0m")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	return s
 }
 
 func renderDetailedMarkdown(session *claude.Session, includeToolMsg bool) string {

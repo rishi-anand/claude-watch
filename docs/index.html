@@ -1088,7 +1088,7 @@
 '<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
 '\n' +
 '<span class="dim">Showing 3 of 12 matches (page 1, limit 50)</span>',
-          hold: 3400
+          hold: 1700
         },
         {
           cmd: 'claude-watch list --repo ~/work/api',
@@ -1098,7 +1098,7 @@
 '<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  stripe-webhook-api    <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>    Debug flaky test in user_test.go…\n' +
 '<span class="id">7f5e2a91-9d40-4718-a2c1-15b7b8f0e9a2</span>  stripe-webhook-api    <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>   Add rate-limit middleware…\n' +
 '<span class="id">4e0c8b1a-2c65-4e83-bff6-6a90d1e04c37</span>  stripe-webhook-api    <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span>  Postgres connection pool tuning…',
-          hold: 3600
+          hold: 2000
         },
         {
           cmd: 'claude-watch export --session-id 83d192d6',
@@ -1106,9 +1106,12 @@
 '<span class="dim">---</span>\n' +
 '<span class="header">session_id:</span> <span class="id">83d192d6-e704-4975-b650-450aa2264072</span>\n' +
 '<span class="header">project:</span> stripe-webhook-api\n' +
+'<span class="header">project_path:</span> /Users/rishi/work/stripe-webhook-api\n' +
+'<span class="header">git_branch:</span> main\n' +
 '<span class="header">started_at:</span> 2026-06-06T09:37:50Z\n' +
 '<span class="header">last_active_at:</span> 2026-06-08T11:30:06Z\n' +
 '<span class="header">model:</span> claude-sonnet-4-6\n' +
+'<span class="header">has_compaction:</span> true\n' +
 '<span class="dim">---</span>\n' +
 '\n' +
 '<span class="ok">## User · 2026-06-06 09:37:50</span>\n' +
@@ -1118,7 +1121,7 @@
 '<span class="ok">## Assistant · 2026-06-06 09:38:02</span>\n' +
 '\n' +
 "I'll create a new migration under db/migrations/…",
-          hold: 3600
+          hold: 2000
         },
         {
           cmd: 'claude-watch install-skill --dry-run',
@@ -1126,7 +1129,7 @@
 '  <span class="dim">[would write]</span> claude    ~/.claude/skills/claude-watch/SKILL.md\n' +
 '  <span class="dim">[would write]</span> codex     ~/.codex/AGENTS.md\n' +
 '  <span class="dim">[would write]</span> cursor    ~/.cursor/rules/claude-watch.mdc',
-          hold: 3200
+          hold: 1700
         }
       ];
 
@@ -1164,8 +1167,8 @@
           await waitWhilePaused();
           typed.textContent += text[i];
           var ch = text[i];
-          var jitter = (ch === ' ' || ch === '-') ? 18 : 24;
-          await sleep(24 + Math.random() * jitter);
+          var jitter = (ch === ' ' || ch === '-') ? 8 : 14;
+          await sleep(10 + Math.random() * jitter);
         }
       }
 
@@ -1173,16 +1176,16 @@
         typed.textContent = '';
         out.innerHTML = '';
         cursor.hidden = false;
-        await sleep(firstScene ? 120 : 180);
+        await sleep(firstScene ? 40 : 60);
         if (cancelled) return;
         await typeText(s.cmd);
         if (cancelled) return;
-        await sleep(180);
+        await sleep(80);
         if (cancelled) return;
         out.innerHTML = s.out;
         cursor.hidden = true;
         var elapsed = 0;
-        var step = 120;
+        var step = 100;
         while (elapsed < s.hold && !cancelled) {
           await sleep(step);
           if (!paused) elapsed += step;

@@ -1082,47 +1082,51 @@
           cmd: 'claude-watch search "database migration" --repo ~/work/api',
           out:
 '<span class="header">CONVERSATION ID                       MATCH</span>\n' +
-'<span class="header">────────────────────────────────────  ─────</span>\n' +
+'<span class="header">------------------------------------  -----</span>\n' +
 '<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
 '<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
 '<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
 '\n' +
-'<span class="dim">Showing 3 of 12 matches · page 1 · limit 50</span>',
-          hold: 4200
+'<span class="dim">Showing 3 of 12 matches (page 1, limit 50)</span>',
+          hold: 3400
         },
         {
           cmd: 'claude-watch list --repo ~/work/api',
           out:
-'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  api  <span class="dim">2026-06-28 20:58 → 2026-06-28 21:21</span>  <span class="dim">[m:266 t:99]</span>  Add list and export subcommands…\n' +
-'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  api  <span class="dim">2026-06-06 09:37 → 2026-06-08 11:30</span>  <span class="dim">[m:297 t:109]</span> Rework database migration flow…\n' +
-'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  api  <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>   Debug flaky test in user_test.go…\n' +
-'<span class="id">7f5e2a91-9d40-4718-a2c1-15b7b8f0e9a2</span>  api  <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>  Add rate-limit middleware…\n' +
-'<span class="id">4e0c8b1a-2c65-4e83-bff6-6a90d1e04c37</span>  api  <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span> Postgres connection pool tuning…\n' +
-'\n' +
-'<span class="dim">5 sessions · repo: ~/work/api</span>',
-          hold: 4400
+'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  stripe-webhook-api    <span class="dim">2026-06-28 20:58 → 2026-06-28 21:21</span>  <span class="dim">[m:266 t:99]</span>   Add list and export subcommands…\n' +
+'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  stripe-webhook-api    <span class="dim">2026-06-06 09:37 → 2026-06-08 11:30</span>  <span class="dim">[m:297 t:109]</span>  Rework database migration flow…\n' +
+'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  stripe-webhook-api    <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>    Debug flaky test in user_test.go…\n' +
+'<span class="id">7f5e2a91-9d40-4718-a2c1-15b7b8f0e9a2</span>  stripe-webhook-api    <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>   Add rate-limit middleware…\n' +
+'<span class="id">4e0c8b1a-2c65-4e83-bff6-6a90d1e04c37</span>  stripe-webhook-api    <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span>  Postgres connection pool tuning…',
+          hold: 3600
         },
         {
-          cmd: 'claude-watch export --session-id 83d192d6 -o migration-notes.md',
+          cmd: 'claude-watch export --session-id 83d192d6',
           out:
-'<span class="ok">✓</span> <span class="dim">Loaded session</span> <span class="id">83d192d6-e704-4975-b650-450aa2264072</span>\n' +
-'<span class="ok">✓</span> <span class="dim">297 messages · 109 tool calls · 2 compaction boundaries</span>\n' +
-'<span class="ok">✓</span> <span class="dim">Stripped tool-only turns (kept user + assistant)</span>\n' +
-'<span class="ok">✓</span> <span class="dim">Wrote</span> <span class="id">migration-notes.md</span> <span class="dim">· 48 KB · 3,412 lines</span>\n' +
+'<span class="dim">---</span>\n' +
+'<span class="header">session_id:</span> <span class="id">83d192d6-e704-4975-b650-450aa2264072</span>\n' +
+'<span class="header">project:</span> stripe-webhook-api\n' +
+'<span class="header">started_at:</span> 2026-06-06T09:37:50Z\n' +
+'<span class="header">last_active_at:</span> 2026-06-08T11:30:06Z\n' +
+'<span class="header">model:</span> claude-sonnet-4-6\n' +
+'<span class="dim">---</span>\n' +
 '\n' +
-'<span class="id">migration-notes.md</span> <span class="dim">is ready to read.</span>',
-          hold: 4000
+'<span class="ok">## User · 2026-06-06 09:37:50</span>\n' +
+'\n' +
+'Add a database migration that introduces a <span class="highlight">deleted_at</span> column on users…\n' +
+'\n' +
+'<span class="ok">## Assistant · 2026-06-06 09:38:02</span>\n' +
+'\n' +
+"I'll create a new migration under db/migrations/…",
+          hold: 3600
         },
         {
           cmd: 'claude-watch install-skill --dry-run',
           out:
-'<span class="dim">[would write]</span> claude   ~/.claude/skills/claude-watch/SKILL.md\n' +
-'<span class="dim">[would write]</span> codex    ~/.codex/AGENTS.md      <span class="warn">(merge)</span>\n' +
-'<span class="dim">[would write]</span> cursor   ~/.cursor/rules/claude-watch.mdc\n' +
-'\n' +
-'<span class="dim">Re-run without --dry-run to install.</span>\n' +
-'<span class="dim">Your coding agent will then know to look here for past sessions.</span>',
-          hold: 4000
+'  <span class="dim">[would write]</span> claude    ~/.claude/skills/claude-watch/SKILL.md\n' +
+'  <span class="dim">[would write]</span> codex     ~/.codex/AGENTS.md\n' +
+'  <span class="dim">[would write]</span> cursor    ~/.cursor/rules/claude-watch.mdc',
+          hold: 3200
         }
       ];
 
@@ -1165,15 +1169,15 @@
         }
       }
 
-      async function runScene(s) {
+      async function runScene(s, firstScene) {
         typed.textContent = '';
         out.innerHTML = '';
         cursor.hidden = false;
-        await sleep(280);
+        await sleep(firstScene ? 120 : 180);
         if (cancelled) return;
         await typeText(s.cmd);
         if (cancelled) return;
-        await sleep(320);
+        await sleep(180);
         if (cancelled) return;
         out.innerHTML = s.out;
         cursor.hidden = true;
@@ -1193,10 +1197,12 @@
           cursor.hidden = true;
           return;
         }
+        var isFirst = true;
         while (true) {
           markTab(idx);
           cancelled = false;
-          await runScene(scenes[idx]);
+          await runScene(scenes[idx], isFirst);
+          isFirst = false;
           if (!cancelled) idx = (idx + 1) % scenes.length;
         }
       }

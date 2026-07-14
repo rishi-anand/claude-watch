@@ -22,6 +22,7 @@ import (
 	"github.com/rishi/claude-watch/internal/db"
 	"github.com/rishi/claude-watch/internal/hooks"
 	"github.com/rishi/claude-watch/internal/setup"
+	"github.com/rishi/claude-watch/internal/skill"
 	"github.com/rishi/claude-watch/internal/store"
 	cwsync "github.com/rishi/claude-watch/internal/sync"
 )
@@ -52,6 +53,8 @@ func main() {
 		cmdExport()
 	case "search":
 		cmdSearch()
+	case "install-skill":
+		cmdInstallSkill()
 	default:
 		printUsage()
 		os.Exit(1)
@@ -60,12 +63,13 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: claude-watch <command>")
-	fmt.Fprintln(os.Stderr, "  serve     Start HTTP server")
-	fmt.Fprintln(os.Stderr, "  hook      Process hook event (reads JSON from stdin)")
-	fmt.Fprintln(os.Stderr, "  rebuild   Force rebuild SQLite index")
-	fmt.Fprintln(os.Stderr, "  list      List sessions (reads JSONL directly, no SQLite)")
-	fmt.Fprintln(os.Stderr, "  export    Export session to detailed markdown (no SQLite)")
-	fmt.Fprintln(os.Stderr, "  search    Search conversation content across sessions (no SQLite)")
+	fmt.Fprintln(os.Stderr, "  serve          Start HTTP server")
+	fmt.Fprintln(os.Stderr, "  hook           Process hook event (reads JSON from stdin)")
+	fmt.Fprintln(os.Stderr, "  rebuild        Force rebuild SQLite index")
+	fmt.Fprintln(os.Stderr, "  list           List sessions (reads JSONL directly, no SQLite)")
+	fmt.Fprintln(os.Stderr, "  export         Export session to detailed markdown (no SQLite)")
+	fmt.Fprintln(os.Stderr, "  search         Search conversation content across sessions")
+	fmt.Fprintln(os.Stderr, "  install-skill  Install the claude-watch skill for Claude, Codex, Cursor, ...")
 }
 
 func cmdServe() {
@@ -947,6 +951,97 @@ func writeDetailedBlocks(b *strings.Builder, contentJSON string) {
 			}
 		}
 	}
+}
+
+func cmdInstallSkill() {
+	var (
+		toolCSV string
+		list    bool
+		dryRun  bool
+		force   bool
+	)
+	for i := 2; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--tool":
+			if i+1 < len(os.Args) {
+				i++
+				toolCSV = os.Args[i]
+			}
+		case "--list":
+			list = true
+		case "--dry-run":
+			dryRun = true
+		case "--force":
+			force = true
+		case "-h", "--help":
+			printInstallSkillUsage()
+			os.Exit(0)
+		}
+	}
+
+	all, err := skill.Targets()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: resolve home dir: %v\n", err)
+		os.Exit(1)
+	}
+
+	if list {
+		fmt.Println("Supported install targets:")
+		for _, t := range all {
+			fmt.Printf("  %-8s  %-18s  %s\n", t.Name, t.DisplayName, t.Path)
+		}
+		return
+	}
+
+	var selected []skill.Target
+	if toolCSV == "" {
+		selected = all
+	} else {
+		for _, name := range strings.Split(toolCSV, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			t, ok := skill.TargetByName(name)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "error: unknown tool %q (run `claude-watch install-skill --list` to see options)\n", name)
+				os.Exit(1)
+			}
+			selected = append(selected, t)
+		}
+	}
+
+	if len(selected) == 0 {
+		fmt.Fprintln(os.Stderr, "error: no targets selected")
+		os.Exit(1)
+	}
+
+	results := skill.Install(selected, dryRun, force)
+	anyErr := false
+	for _, r := range results {
+		switch r.Action {
+		case "error":
+			anyErr = true
+			fmt.Fprintf(os.Stderr, "  [ERR] %-8s  %s: %v\n", r.Target.Name, r.Target.Path, r.Err)
+		case "dry-run":
+			fmt.Printf("  [would write] %-8s  %s\n", r.Target.Name, r.Target.Path)
+		case "unchanged":
+			fmt.Printf("  [unchanged]   %-8s  %s\n", r.Target.Name, r.Target.Path)
+		default:
+			fmt.Printf("  [%s]  %-8s  %s\n", r.Action, r.Target.Name, r.Target.Path)
+		}
+	}
+	if anyErr {
+		os.Exit(1)
+	}
+}
+
+func printInstallSkillUsage() {
+	fmt.Fprintln(os.Stderr, "Usage: claude-watch install-skill [flags]")
+	fmt.Fprintln(os.Stderr, "  --tool <csv>   Comma-separated tool ids (default: all)")
+	fmt.Fprintln(os.Stderr, "  --list         List supported tools and their target paths")
+	fmt.Fprintln(os.Stderr, "  --dry-run      Show what would be written, don't touch files")
+	fmt.Fprintln(os.Stderr, "  --force        Rewrite even if content is unchanged")
 }
 
 func openBrowser(url string) {

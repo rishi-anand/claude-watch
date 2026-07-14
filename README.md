@@ -50,6 +50,7 @@ After confirming, the browser opens at `http://localhost:7823` and all your exis
 - **Rich conversation view** — renders markdown, tool calls, tool results, compaction markers
 - **Project filter** — browse sessions by project
 - **CLI list & export** — browse and export sessions from the command line, no SQLite needed
+- **Agent skill install** — teach Claude Code, Codex, and Cursor to use `claude-watch` for looking up past conversations
 - **Dark/light theme** — toggle in the header, preference saved across sessions
 - **Zero dependencies** — single static binary, no CGO, no Docker, no database server
 - **Transparent setup** — shows exactly what will be written before touching any config
@@ -183,7 +184,7 @@ Full-text search across every captured conversation. Uses the same FTS5 index as
 claude-watch search "ssh tunnel"
 
 # Scope to a repo
-claude-watch search "airgapped cluster" --repo /path/to/your/project
+claude-watch search "database migration" --repo /path/to/your/project
 
 # Scope to a single session
 claude-watch search "compact boundary" --session-id <session-id>
@@ -192,7 +193,7 @@ claude-watch search "compact boundary" --session-id <session-id>
 claude-watch search "foo" --page 2 --limit 20
 
 # JSON output (for scripting)
-claude-watch search "kubevirt" --json | jq '.results[]'
+claude-watch search "auth token" --json | jq '.results[]'
 ```
 
 **Example output:**
@@ -221,6 +222,36 @@ Supported events: `SessionStart`, `UserPromptSubmit`, `Stop`, `PreCompact`, `Ses
 
 The `PreCompact` hook is the most critical — it fires **before** Claude compacts the context, ensuring full history is preserved.
 
+### `install-skill` — Teach coding assistants to use claude-watch
+
+Installs a skill file that tells your coding assistant how and when to use `claude-watch` for looking up prior conversations. Once installed, asking things like _"what was that session where I debugged the flaky test?"_ will route through `claude-watch` instead of grepping raw JSONL.
+
+Supported targets: **Claude Code**, **OpenAI Codex CLI**, **Cursor**.
+
+```bash
+# Install for all supported tools (Claude Code, Codex, Cursor)
+claude-watch install-skill
+
+# See what would be written without touching anything
+claude-watch install-skill --dry-run
+
+# List supported tools and their target paths
+claude-watch install-skill --list
+
+# Install for a specific tool (or a comma-separated subset)
+claude-watch install-skill --tool claude
+claude-watch install-skill --tool claude,cursor
+
+# Rewrite even if content is unchanged
+claude-watch install-skill --force
+```
+
+| Tool | Destination |
+|------|-------------|
+| `claude` | `~/.claude/skills/claude-watch/SKILL.md` |
+| `codex`  | `~/.codex/AGENTS.md` (merged with begin/end markers, safe to re-run) |
+| `cursor` | `~/.cursor/rules/claude-watch.mdc` |
+
 ### `rebuild` — Rebuild search index
 
 Force rebuild the SQLite FTS5 search index from all session files.
@@ -233,12 +264,12 @@ claude-watch rebuild
 
 ## Search
 
-Type words to search — all words must match. Hyphens and apostrophes are treated as word separators.
+Type words to search — all words must match. Hyphens and apostrophes are treated as word separators, so a hyphenated term expands into all of its parts.
 
 | Query | Matches |
 |-------|---------|
 | `ssh tunnel` | messages containing both "ssh" and "tunnel" |
-| `palette-agentic-cli` | messages containing "palette", "agentic", and "cli" |
+| `feature-flag-config` | messages containing "feature", "flag", and "config" |
 | `Cloud's` | messages containing "Cloud" |
 
 ---

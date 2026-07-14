@@ -369,10 +369,11 @@
       padding: 1.25rem 1.5rem;
       color: var(--ink);
       overflow-x: auto;
-      min-height: 19rem;
+      min-height: 25rem;
+      scroll-behavior: smooth;
     }
     .terminal__cmd { white-space: pre; margin-bottom: .2rem; }
-    .terminal__out { white-space: pre; min-height: 14rem; }
+    .terminal__out { white-space: pre; min-height: 20rem; }
     .terminal__out .header { color: var(--ink-3); }
     .terminal__out .id { color: var(--accent); }
     .terminal__out .highlight { color: var(--ink); background: var(--accent-soft); padding: 0 3px; border-radius: 2px; }
@@ -1093,11 +1094,11 @@
         {
           cmd: 'claude-watch list --repo ~/work/api',
           out:
-'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  stripe-webhook-api    <span class="dim">2026-06-28 20:58 → 2026-06-28 21:21</span>  <span class="dim">[m:266 t:99]</span>   Add list and export subcommands…\n' +
-'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  stripe-webhook-api    <span class="dim">2026-06-06 09:37 → 2026-06-08 11:30</span>  <span class="dim">[m:297 t:109]</span>  Rework database migration flow…\n' +
-'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  stripe-webhook-api    <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>    Debug flaky test in user_test.go…\n' +
-'<span class="id">7f5e2a91-9d40-4718-a2c1-15b7b8f0e9a2</span>  stripe-webhook-api    <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>   Add rate-limit middleware…\n' +
-'<span class="id">4e0c8b1a-2c65-4e83-bff6-6a90d1e04c37</span>  stripe-webhook-api    <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span>  Postgres connection pool tuning…',
+'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>    stripe-webhook-api    <span class="dim">2026-06-28 20:58 → 2026-06-28 21:21</span>  <span class="dim">[m:266 t:99]</span>  Add list and export subcommands…\n' +
+'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>    stripe-webhook-api    <span class="dim">2026-06-06 09:37 → 2026-06-08 11:30</span>  <span class="dim">[m:297 t:109]</span>  Rework database migration flow…\n' +
+'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>    stripe-webhook-api    <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>  Debug flaky test in user_test.go…\n' +
+'<span class="id">7f5e2a91-9d40-4718-a2c1-15b7b8f0e9a2</span>    stripe-webhook-api    <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>  Add rate-limit middleware…\n' +
+'<span class="id">4e0c8b1a-2c65-4e83-bff6-6a90d1e04c37</span>    stripe-webhook-api    <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span>  Postgres connection pool tuning…',
           hold: 2000
         },
         {
@@ -1161,11 +1162,21 @@
         while (paused && !cancelled) await sleep(180);
       }
 
+      function keepCursorVisible() {
+        // Auto-scroll the terminal body so the typing cursor stays visible
+        // when the command is wider than the viewport.
+        if (body.scrollWidth > body.clientWidth) {
+          body.scrollLeft = body.scrollWidth;
+        }
+      }
+
       async function typeText(text) {
         typed.textContent = '';
+        body.scrollLeft = 0;
         for (var i = 0; i < text.length && !cancelled; i++) {
           await waitWhilePaused();
           typed.textContent += text[i];
+          keepCursorVisible();
           var ch = text[i];
           var jitter = (ch === ' ' || ch === '-') ? 8 : 14;
           await sleep(10 + Math.random() * jitter);
@@ -1184,6 +1195,7 @@
         if (cancelled) return;
         out.innerHTML = s.out;
         cursor.hidden = true;
+        body.scrollLeft = 0;
         var elapsed = 0;
         var step = 100;
         while (elapsed < s.hold && !cancelled) {

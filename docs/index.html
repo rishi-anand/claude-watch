@@ -369,16 +369,17 @@
       padding: 1.25rem 1.5rem;
       color: var(--ink);
       overflow-x: auto;
+      min-height: 19rem;
     }
-    .terminal__line { white-space: pre; display: block; }
-    .terminal__line .prompt { color: var(--accent); }
-    .terminal__line .cmd { color: var(--ink); }
-    .terminal__line .flag { color: var(--ink-2); }
-    .terminal__line .arg { color: #6fbc95; }
-    .terminal__line .header { color: var(--ink-3); }
-    .terminal__line .id { color: var(--accent); }
-    .terminal__line .highlight { color: var(--ink); background: var(--accent-soft); padding: 0 3px; border-radius: 2px; }
-    .terminal__line .dim { color: var(--ink-3); }
+    .terminal__cmd { white-space: pre; margin-bottom: .2rem; }
+    .terminal__out { white-space: pre; min-height: 14rem; }
+    .terminal__out .header { color: var(--ink-3); }
+    .terminal__out .id { color: var(--accent); }
+    .terminal__out .highlight { color: var(--ink); background: var(--accent-soft); padding: 0 3px; border-radius: 2px; }
+    .terminal__out .dim { color: var(--ink-3); }
+    .terminal__out .ok { color: #6fbc95; }
+    .terminal__out .warn { color: #f0b76b; }
+    .terminal__cmd .prompt { color: var(--accent); }
     .terminal__cursor {
       display: inline-block;
       width: 8px; height: 1.05em;
@@ -387,7 +388,29 @@
       animation: cursor 1s steps(2) infinite;
       margin-left: 2px;
     }
+    .terminal__cursor[hidden] { display: none; }
     @keyframes cursor { 50% { opacity: 0; } }
+    .terminal__tabs {
+      display: flex;
+      gap: .35rem;
+      margin-left: 1rem;
+    }
+    .terminal__tab {
+      font-family: var(--f-mono);
+      font-size: .7rem;
+      color: var(--ink-3);
+      letter-spacing: .04em;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--line);
+      background: transparent;
+      transition: color .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .terminal__tab.is-active {
+      color: var(--accent);
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+    }
     @media (min-width: 900px) {
       .terminal { margin: 0; }
     }
@@ -809,9 +832,18 @@
           <span class="terminal__dot"></span>
           <span class="terminal__dot"></span>
           <span class="terminal__dot"></span>
-          <span class="terminal__title">~/work — claude-watch</span>
+          <div class="terminal__tabs" id="term-tabs" aria-hidden="true">
+            <span class="terminal__tab" data-scene="0">search</span>
+            <span class="terminal__tab" data-scene="1">list</span>
+            <span class="terminal__tab" data-scene="2">export</span>
+            <span class="terminal__tab" data-scene="3">install-skill</span>
+          </div>
+          <span class="terminal__title" style="margin-left:auto;margin-right:0">~/work — claude-watch</span>
         </div>
-        <div class="terminal__body" aria-hidden="true"><span class="terminal__line"><span class="prompt">$</span> <span class="cmd">claude-watch</span> <span class="arg">search</span> <span class="arg">"database migration"</span> <span class="flag">--repo</span> <span class="dim">~/work/api</span></span><span class="terminal__line"></span><span class="terminal__line"><span class="header">CONVERSATION ID                       MATCH</span></span><span class="terminal__line"><span class="header">────────────────────────────────────  ─────</span></span><span class="terminal__line"><span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  …run the <span class="highlight">database migration</span> before the deploy, then…</span><span class="terminal__line"><span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…</span><span class="terminal__line"><span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  …I want to add a <span class="highlight">database migration</span> for the users table…</span><span class="terminal__line"></span><span class="terminal__line"><span class="dim">Showing 3 of 12 matches (page 1, limit 50)</span></span><span class="terminal__line"></span><span class="terminal__line"><span class="prompt">$</span> <span class="cmd">claude-watch</span> <span class="arg">export</span> <span class="flag">--session-id</span> <span class="dim">83d192d6</span> <span class="flag">-o</span> <span class="dim">migration-notes.md</span><span class="terminal__cursor"></span></span></div>
+        <div class="terminal__body" aria-hidden="true">
+          <div class="terminal__cmd"><span class="prompt">$</span> <span id="term-typed"></span><span class="terminal__cursor" id="term-cursor"></span></div>
+          <div class="terminal__out" id="term-out"></div>
+        </div>
       </div>
     </div>
   </header>
@@ -1034,6 +1066,141 @@
           document.body.removeChild(ta);
         }
       });
+    })();
+
+    // Terminal demo — cycle through commands with typewriter effect
+    (function () {
+      var typed  = document.getElementById('term-typed');
+      var out    = document.getElementById('term-out');
+      var cursor = document.getElementById('term-cursor');
+      var tabs   = document.querySelectorAll('#term-tabs .terminal__tab');
+      var body   = document.querySelector('.terminal__body');
+      if (!typed || !out || !cursor) return;
+
+      var scenes = [
+        {
+          cmd: 'claude-watch search "database migration" --repo ~/work/api',
+          out:
+'<span class="header">CONVERSATION ID                       MATCH</span>\n' +
+'<span class="header">────────────────────────────────────  ─────</span>\n' +
+'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
+'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
+'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
+'\n' +
+'<span class="dim">Showing 3 of 12 matches · page 1 · limit 50</span>',
+          hold: 4200
+        },
+        {
+          cmd: 'claude-watch list --repo ~/work/api',
+          out:
+'<span class="id">acae171d…</span>  api   <span class="dim">2026-06-28 20:58 → 2026-06-28 21:21</span>  <span class="dim">[m:266 t:99]</span>  Add list and export subcommands…\n' +
+'<span class="id">83d192d6…</span>  api   <span class="dim">2026-06-06 09:37 → 2026-06-08 11:30</span>  <span class="dim">[m:297 t:109]</span> Rework database migration flow…\n' +
+'<span class="id">b1c29a16…</span>  api   <span class="dim">2026-05-14 22:05 → 2026-05-14 22:07</span>  <span class="dim">[m:12 t:3]</span>   Debug flaky test in user_test.go…\n' +
+'<span class="id">7f5e2a91…</span>  api   <span class="dim">2026-05-11 09:12 → 2026-05-11 10:04</span>  <span class="dim">[m:88 t:34]</span>  Add rate-limit middleware…\n' +
+'<span class="id">4e0c8b1a…</span>  api   <span class="dim">2026-04-30 14:22 → 2026-04-30 15:47</span>  <span class="dim">[m:141 t:52]</span> Postgres connection pool tuning…\n' +
+'\n' +
+'<span class="dim">5 sessions · repo: ~/work/api</span>',
+          hold: 4400
+        },
+        {
+          cmd: 'claude-watch export --session-id 83d192d6 -o migration-notes.md',
+          out:
+'<span class="ok">✓</span> <span class="dim">Loaded session</span> <span class="id">83d192d6-e704-4975-b650-450aa2264072</span>\n' +
+'<span class="ok">✓</span> <span class="dim">297 messages · 109 tool calls · 2 compaction boundaries</span>\n' +
+'<span class="ok">✓</span> <span class="dim">Stripped tool-only turns (kept user + assistant)</span>\n' +
+'<span class="ok">✓</span> <span class="dim">Wrote</span> <span class="id">migration-notes.md</span> <span class="dim">· 48 KB · 3,412 lines</span>\n' +
+'\n' +
+'<span class="id">migration-notes.md</span> <span class="dim">is ready to read.</span>',
+          hold: 4000
+        },
+        {
+          cmd: 'claude-watch install-skill --dry-run',
+          out:
+'<span class="dim">[would write]</span> claude   ~/.claude/skills/claude-watch/SKILL.md\n' +
+'<span class="dim">[would write]</span> codex    ~/.codex/AGENTS.md      <span class="warn">(merge)</span>\n' +
+'<span class="dim">[would write]</span> cursor   ~/.cursor/rules/claude-watch.mdc\n' +
+'\n' +
+'<span class="dim">Re-run without --dry-run to install.</span>\n' +
+'<span class="dim">Your coding agent will then know to look here for past sessions.</span>',
+          hold: 4000
+        }
+      ];
+
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var paused = false;
+      var idx = 0;
+      var cancelled = false;
+
+      body.addEventListener('mouseenter', function () { paused = true; });
+      body.addEventListener('mouseleave', function () { paused = false; });
+
+      tabs.forEach(function (tab) {
+        tab.style.cursor = 'pointer';
+        tab.addEventListener('click', function () {
+          idx = parseInt(tab.getAttribute('data-scene'), 10);
+          cancelled = true;
+        });
+      });
+
+      function markTab(i) {
+        tabs.forEach(function (t, ti) {
+          if (ti === i) t.classList.add('is-active');
+          else t.classList.remove('is-active');
+        });
+      }
+
+      function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+      async function waitWhilePaused() {
+        while (paused && !cancelled) await sleep(180);
+      }
+
+      async function typeText(text) {
+        typed.textContent = '';
+        for (var i = 0; i < text.length && !cancelled; i++) {
+          await waitWhilePaused();
+          typed.textContent += text[i];
+          var ch = text[i];
+          var jitter = (ch === ' ' || ch === '-') ? 18 : 24;
+          await sleep(24 + Math.random() * jitter);
+        }
+      }
+
+      async function runScene(s) {
+        typed.textContent = '';
+        out.innerHTML = '';
+        cursor.hidden = false;
+        await sleep(280);
+        if (cancelled) return;
+        await typeText(s.cmd);
+        if (cancelled) return;
+        await sleep(320);
+        if (cancelled) return;
+        out.innerHTML = s.out;
+        cursor.hidden = true;
+        var elapsed = 0;
+        var step = 120;
+        while (elapsed < s.hold && !cancelled) {
+          await sleep(step);
+          if (!paused) elapsed += step;
+        }
+      }
+
+      async function loop() {
+        if (reduced) {
+          markTab(0);
+          typed.textContent = scenes[0].cmd;
+          out.innerHTML = scenes[0].out;
+          cursor.hidden = true;
+          return;
+        }
+        while (true) {
+          markTab(idx);
+          cancelled = false;
+          await runScene(scenes[idx]);
+          if (!cancelled) idx = (idx + 1) % scenes.length;
+        }
+      }
+      loop();
     })();
   </script>
 </body>

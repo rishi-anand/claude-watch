@@ -98,6 +98,19 @@ func RebuildFTS(db *sql.DB) error {
 	return tx.Commit()
 }
 
+// GetMessageContent returns the plain-text content of a single message,
+// looked up by (session_id, msg_uuid). Empty string if not found.
+func GetMessageContent(db *sql.DB, sessionID, msgUUID string) (string, error) {
+	var content string
+	err := db.QueryRow(`
+		SELECT COALESCE(content_text,'') FROM messages
+		WHERE session_id = ? AND msg_uuid = ?`, sessionID, msgUUID).Scan(&content)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return content, err
+}
+
 func ListMessages(db *sql.DB, sessionID string) ([]MessageRow, error) {
 	rows, err := db.Query(`
 		SELECT id, session_id, msg_uuid, msg_type, COALESCE(role,''), COALESCE(content_text,''), COALESCE(content_json,''), timestamp, seq

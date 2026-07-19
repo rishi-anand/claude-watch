@@ -510,8 +510,8 @@ func cmdSearch() {
 	cfg := config.Load()
 	setup.LoadSaved(cfg)
 
-	var repoPath, sessionID string
-	var jsonOutput bool
+	var repoPath, sessionID, msgID string
+	var jsonOutput, expand bool
 	var page = 1
 	var limit = 50
 	var queryParts []string
@@ -527,8 +527,15 @@ func cmdSearch() {
 				i++
 				sessionID = os.Args[i]
 			}
+		case "--msg-id":
+			if i+1 < len(os.Args) {
+				i++
+				msgID = strings.ToLower(strings.TrimSpace(os.Args[i]))
+			}
 		case "--json":
 			jsonOutput = true
+		case "--expand":
+			expand = true
 		case "--page":
 			if i+1 < len(os.Args) {
 				i++
@@ -552,7 +559,7 @@ func cmdSearch() {
 	}
 
 	if len(queryParts) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: claude-watch search <query> [--repo <path>] [--session-id <id>] [--page <n>] [--limit <n>] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: claude-watch search <query> [--repo <path>] [--session-id <id>] [--msg-id <uuid>] [--page <n>] [--limit <n>] [--expand] [--json]")
 		os.Exit(1)
 	}
 	query := strings.Join(queryParts, " ")
@@ -583,11 +590,12 @@ func cmdSearch() {
 	}
 
 	type hitJSON struct {
-		SessionID   string `json:"session_id"`
-		Project     string `json:"project"`
-		UUID        string `json:"uuid"`
-		Timestamp   string `json:"timestamp"`
-		Snippet     string `json:"snippet"`
+		SessionID string `json:"session_id"`
+		Project   string `json:"project"`
+		UUID      string `json:"uuid"`
+		Timestamp string `json:"timestamp"`
+		Snippet   string `json:"snippet"`
+		FullText  string `json:"full_text,omitempty"`
 	}
 
 	var kept []store.SearchResult
@@ -598,7 +606,27 @@ func cmdSearch() {
 		if projectFilter != "" && r.ProjectName != projectFilter {
 			continue
 		}
+		if msgID != "" && !strings.HasPrefix(strings.ToLower(r.MsgUUID), msgID) {
+			continue
+		}
 		kept = append(kept, r)
+	}
+
+	// --msg-id implies --expand — the whole point of picking one message is to read it.
+	if msgID != "" {
+		expand = true
+	}
+
+	// When --expand is set, fetch the full content_text for each hit.
+	fullText := make(map[string]string, len(kept))
+	if expand {
+		for _, r := range kept {
+			text, err := store.GetMessageContent(database, r.SessionID, r.MsgUUID)
+			if err != nil {
+				continue
+			}
+			fullText[r.SessionID+"\x00"+r.MsgUUID] = text
+		}
 	}
 
 	if jsonOutput {
@@ -615,13 +643,17 @@ func cmdSearch() {
 			Limit: limit,
 		}
 		for _, r := range kept {
-			out.Results = append(out.Results, hitJSON{
+			h := hitJSON{
 				SessionID: r.SessionID,
 				Project:   r.ProjectName,
 				UUID:      r.MsgUUID,
 				Timestamp: r.Timestamp.UTC().Format(time.RFC3339),
 				Snippet:   stripMarkTags(r.Snippet),
-			})
+			}
+			if expand {
+				h.FullText = fullText[r.SessionID+"\x00"+r.MsgUUID]
+			}
+			out.Results = append(out.Results, h)
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -634,14 +666,130 @@ func cmdSearch() {
 		os.Exit(0)
 	}
 
-	// Table output: conversation id | text
 	const idW = 36
-	fmt.Printf("%-*s  %s\n", idW, "CONVERSATION ID", "MATCH")
-	fmt.Printf("%s  %s\n", strings.Repeat("-", idW), strings.Repeat("-", 5))
-	for _, r := range kept {
-		fmt.Printf("%-*s  %s\n", idW, r.SessionID, renderSnippetForTerminal(r.Snippet))
+	const msgW = 8 // short msg_uuid prefix
+	const tsW = 19 // "2006-01-02 15:04:05"
+
+	if expand {
+		for i, r := range kept {
+			if i > 0 {
+				fmt.Println()
+			}
+			ts := formatSearchTimestamp(r.Timestamp)
+			fmt.Printf("── %s  msg:%s  %s ──\n", r.SessionID, r.MsgUUID, ts)
+			text := fullText[r.SessionID+"\x00"+r.MsgUUID]
+			if text == "" {
+				// Fall back to the snippet (with mark tags stripped) if content is missing.
+				text = stripMarkTags(r.Snippet)
+			}
+			fmt.Println(highlightQueryTerms(text, query))
+		}
+	} else {
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n", idW, "CONVERSATION ID", msgW, "MSG", tsW, "TIMESTAMP", "MATCH")
+		fmt.Printf("%s  %s  %s  %s\n", strings.Repeat("-", idW), strings.Repeat("-", msgW), strings.Repeat("-", tsW), strings.Repeat("-", 5))
+		for _, r := range kept {
+			fmt.Printf("%-*s  %-*s  %-*s  %s\n", idW, r.SessionID, msgW, shortMsgID(r.MsgUUID), tsW, formatSearchTimestamp(r.Timestamp), renderSnippetForTerminal(r.Snippet))
+		}
 	}
 	fmt.Fprintf(os.Stderr, "\nShowing %d of %d matches (page %d, limit %d)\n", len(kept), total, page, limit)
+}
+
+// shortMsgID returns the first 8 chars of a message UUID — enough to be a
+// unique prefix in practice, and unambiguous when paired with --session-id.
+func shortMsgID(uuid string) string {
+	if len(uuid) <= 8 {
+		return uuid
+	}
+	return uuid[:8]
+}
+
+// formatSearchTimestamp renders a message timestamp for CLI display.
+// Falls back to a placeholder when the timestamp is zero (missing in DB).
+func formatSearchTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.Local().Format("2006-01-02 15:04:05")
+}
+
+// highlightQueryTerms wraps each search term in the expanded text in ANSI
+// bold/yellow so matches stand out. Case-insensitive whole-substring match
+// mirrors the FTS5 tokenization (which already strips hyphens/apostrophes).
+func highlightQueryTerms(text, query string) string {
+	terms := extractQueryTerms(query)
+	if len(terms) == 0 {
+		return text
+	}
+	lower := strings.ToLower(text)
+	type span struct{ start, end int }
+	var spans []span
+	for _, term := range terms {
+		if term == "" {
+			continue
+		}
+		lt := strings.ToLower(term)
+		from := 0
+		for {
+			idx := strings.Index(lower[from:], lt)
+			if idx < 0 {
+				break
+			}
+			s := from + idx
+			spans = append(spans, span{s, s + len(lt)})
+			from = s + len(lt)
+		}
+	}
+	if len(spans) == 0 {
+		return text
+	}
+	// Sort and merge overlapping spans.
+	for i := 0; i < len(spans); i++ {
+		for j := i + 1; j < len(spans); j++ {
+			if spans[j].start < spans[i].start {
+				spans[i], spans[j] = spans[j], spans[i]
+			}
+		}
+	}
+	merged := spans[:0]
+	for _, sp := range spans {
+		if len(merged) > 0 && sp.start <= merged[len(merged)-1].end {
+			if sp.end > merged[len(merged)-1].end {
+				merged[len(merged)-1].end = sp.end
+			}
+			continue
+		}
+		merged = append(merged, sp)
+	}
+	var sb strings.Builder
+	cursor := 0
+	for _, sp := range merged {
+		sb.WriteString(text[cursor:sp.start])
+		sb.WriteString("\x1b[1;33m")
+		sb.WriteString(text[sp.start:sp.end])
+		sb.WriteString("\x1b[0m")
+		cursor = sp.end
+	}
+	sb.WriteString(text[cursor:])
+	return sb.String()
+}
+
+// extractQueryTerms splits the user's raw query the same way ParseQuery does,
+// so highlighting matches what actually got sent to FTS5.
+func extractQueryTerms(query string) []string {
+	q := query
+	q = strings.ReplaceAll(q, "-", " ")
+	q = strings.ReplaceAll(q, "'", " ")
+	q = strings.ReplaceAll(q, ",", " ")
+	q = strings.ReplaceAll(q, ";", " ")
+	fields := strings.Fields(q)
+	var terms []string
+	for _, f := range fields {
+		f = strings.Trim(f, "\"()*^:\\")
+		if f != "" {
+			terms = append(terms, f)
+		}
+	}
+	return terms
 }
 
 // stripMarkTags removes the <mark>...</mark> highlight markers produced by

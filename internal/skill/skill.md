@@ -30,10 +30,14 @@ claude-watch search "ssh tunnel"                       # all sessions
 claude-watch search "airgapped cluster" --repo /path   # scope to one repo
 claude-watch search "compact boundary" --session-id <id>
 claude-watch search "foo" --limit 20 --page 2          # pagination
+claude-watch search "foo" --expand                     # print full message body per hit
+claude-watch search "foo" --msg-id 97fd879c            # drill into one message (implies --expand)
 claude-watch search "foo" --json                       # machine-readable
 ```
 
-Default output is a two-column table: `CONVERSATION ID | MATCH`. Matches are highlighted with ANSI in the terminal; the `--json` variant strips the `<mark>` tags and adds session id, project, message uuid, and timestamp per hit.
+Default output is a four-column table: `CONVERSATION ID | MSG | TIMESTAMP | MATCH`. The `MSG` column is the first 8 chars of the message UUID — enough to feed back into `--msg-id`. Matches are highlighted with ANSI in the terminal; `--json` strips the `<mark>` tags and adds `session_id`, `project`, full message `uuid`, and `timestamp` per hit.
+
+**Reading a specific hit in full.** From the table, grab the `MSG` prefix and re-run with `--msg-id <prefix>` (or the full UUID from `--json`). That filters to just that message and prints its full `content_text` with query terms highlighted — no need to `export` the whole session just to read one turn. `--expand` alone does the same for every hit on the page (useful when you want the top N matches in full).
 
 Read the query semantics before framing results for the user:
 - No phrase matching — quoted strings aren't respected, they're just split on whitespace.
@@ -91,11 +95,15 @@ Use when `search` returns 0 hits for something the user swears they discussed, o
 ```bash
 claude-watch search "FIPS build" --limit 20
 ```
-Then, for a promising hit, export the session:
+For a promising hit, either read that one turn in full…
+```bash
+claude-watch search "FIPS build" --msg-id <MSG-prefix-from-table>
+```
+…or export the whole session for surrounding context:
 ```bash
 claude-watch export --session-id <id> -o /tmp/session.md
 ```
-Read the exported markdown to answer the user's actual question.
+Prefer `--msg-id` when the snippet already looks like the answer; fall back to `export` when you need the conversation around it.
 
 **"Show me my recent sessions in this repo"**
 ```bash

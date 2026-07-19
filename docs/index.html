@@ -835,9 +835,10 @@
           <span class="terminal__dot"></span>
           <div class="terminal__tabs" id="term-tabs" aria-hidden="true">
             <span class="terminal__tab" data-scene="0">search</span>
-            <span class="terminal__tab" data-scene="1">list</span>
-            <span class="terminal__tab" data-scene="2">export</span>
-            <span class="terminal__tab" data-scene="3">install-skill</span>
+            <span class="terminal__tab" data-scene="1">search --msg-id</span>
+            <span class="terminal__tab" data-scene="2">list</span>
+            <span class="terminal__tab" data-scene="3">export</span>
+            <span class="terminal__tab" data-scene="4">install-skill</span>
           </div>
           <span class="terminal__title" style="margin-left:auto;margin-right:0">~/work — claude-watch</span>
         </div>
@@ -957,7 +958,7 @@
       </div>
       <div class="cmd">
         <div class="cmd__name">claude-watch search <span class="flag">&lt;query&gt;</span></div>
-        <div class="cmd__desc">Full-text search every captured conversation. Same FTS5 index as the web UI. <code>--json</code> for scripting.</div>
+        <div class="cmd__desc">Full-text search every captured conversation. Same FTS5 index as the web UI. Add <code>--expand</code> for full message bodies, <code>--msg-id</code> to drill into one turn, or <code>--json</code> for scripting.</div>
       </div>
       <div class="cmd">
         <div class="cmd__name">claude-watch export <span class="flag">--session-id</span></div>
@@ -1082,14 +1083,33 @@
         {
           cmd: 'claude-watch search "database migration" --repo ~/work/api',
           out:
-'<span class="header">CONVERSATION ID                       MATCH</span>\n' +
-'<span class="header">------------------------------------  -----</span>\n' +
-'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
-'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
-'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
+'<span class="header">CONVERSATION ID                       MSG       TIMESTAMP            MATCH</span>\n' +
+'<span class="header">------------------------------------  --------  -------------------  -----</span>\n' +
+'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  <span class="id">a4f19c02</span>  <span class="dim">2026-06-06 09:37:50</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
+'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  <span class="id">7c3e8d55</span>  <span class="dim">2026-05-14 22:05:11</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
+'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  <span class="id">e219fa10</span>  <span class="dim">2026-06-28 20:58:34</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
 '\n' +
 '<span class="dim">Showing 3 of 12 matches (page 1, limit 50)</span>',
           hold: 1700
+        },
+        {
+          cmd: 'claude-watch search "database migration" --msg-id a4f19c02',
+          out:
+'<span class="dim">── </span><span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  msg:<span class="id">a4f19c02-91d3-4c7e-9b8a-2fb0e5c19d84</span>  <span class="dim">2026-06-06 09:37:50 ──</span>\n' +
+'\n' +
+'Yes — you can run the <span class="highlight">database migration</span> before the deploy, then flip the feature flag on\n' +
+'after the app comes back up. That gives you two clean rollback points: revert the flag if the\n' +
+'app misbehaves, and only touch the schema if that also fails.\n' +
+'\n' +
+'Concretely for this service:\n' +
+'\n' +
+'  1. Run <code>bin/migrate up</code> against prod — safe because the new column is nullable and\n' +
+'     no code reads it yet.\n' +
+'  2. Deploy the app image that <em>writes</em> to <code>deleted_at</code> but still ignores it on read.\n' +
+'  3. Enable the <code>soft_delete</code> flag to start honoring it on read.\n' +
+'\n' +
+'<span class="dim">Showing 1 of 12 matches (page 1, limit 50)</span>',
+          hold: 2400
         },
         {
           cmd: 'claude-watch list --repo ~/work/api',

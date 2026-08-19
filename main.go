@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,11 @@ import (
 
 //go:embed static
 var staticEmbed embed.FS
+
+// version is the release tag, injected at build time with
+// -X main.version=<tag>. Local builds leave it as "dev" and fall back to the
+// git revision Go stamps into the binary.
+var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -55,6 +61,8 @@ func main() {
 		cmdSearch()
 	case "install-skill":
 		cmdInstallSkill()
+	case "version", "--version", "-v":
+		cmdVersion()
 	default:
 		printUsage()
 		os.Exit(1)
@@ -70,6 +78,48 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  export         Export session to detailed markdown (no SQLite)")
 	fmt.Fprintln(os.Stderr, "  search         Search conversation content across sessions")
 	fmt.Fprintln(os.Stderr, "  install-skill  Install the claude-watch skill for Claude, Codex, Cursor, ...")
+	fmt.Fprintln(os.Stderr, "  version        Print version and build information")
+}
+
+// cmdVersion prints the build identity — the first thing to ask for in a bug
+// report, and the only way to tell two local builds apart.
+func cmdVersion() {
+	fmt.Printf("claude-watch %s\n", versionString())
+	fmt.Printf("  go:       %s\n", runtime.Version())
+	fmt.Printf("  platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+}
+
+// versionString returns the injected release tag. Untagged builds report the
+// git revision Go stamps in automatically, so "dev" alone is never the answer
+// when better information exists.
+func versionString() string {
+	if version != "" && version != "dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+	var revision, modified string
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value
+		}
+	}
+	if revision == "" {
+		return version
+	}
+	if len(revision) > 12 {
+		revision = revision[:12]
+	}
+	out := version + " (" + revision
+	if modified == "true" {
+		out += "-dirty"
+	}
+	return out + ")"
 }
 
 func cmdServe() {

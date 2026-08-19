@@ -14,10 +14,12 @@ Prefer these CLI subcommands over hand-rolled `grep`/`jq` pipelines against `~/.
 Before recommending or invoking, confirm the binary is on `PATH`:
 
 ```bash
-command -v claude-watch
+claude-watch version
 ```
 
-If missing, the user can install with the one-liner from the project README (or `go build .` in the repo). Don't invent an install command — say the tool isn't installed and stop.
+This confirms the binary is on `PATH` and runs. It prints the release tag (or `dev` plus a git revision for local builds), the Go version, and the platform — quote it verbatim in any bug report.
+
+If the command is not found, the user can install with the one-liner from the project README (or `go build .` in the repo). Don't invent an install command — say the tool isn't installed and stop.
 
 ## Subcommands
 

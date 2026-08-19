@@ -320,6 +320,22 @@ The Markdown files are the source of truth; the index is disposable and always r
 
 ---
 
+### `version` — print build identity
+
+```bash
+claude-watch version     # also accepts --version and -v
+```
+
+```
+claude-watch v0.4.0
+  go:       go1.25.1
+  platform: darwin/arm64
+```
+
+Release binaries report their tag. A local `make build` reports `dev` plus the git revision it came from, with `-dirty` appended when the working tree had uncommitted changes — so two local builds are always distinguishable.
+
+---
+
 ## How it works
 
 `claude-watch` uses [Claude Code hooks](https://code.claude.com/docs/en/hooks) — shell scripts that Claude Code invokes at key points in a conversation. Each hook pipes JSON to the `claude-watch` binary directly (no server, no HTTP round-trip):

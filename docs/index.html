@@ -1081,13 +1081,13 @@
 
       var scenes = [
         {
-          cmd: 'claude-watch search "database migration" --repo ~/work/api',
+          cmd: 'claude-watch search "database migration"',
           out:
-'<span class="header">CONVERSATION ID                       MSG       TIMESTAMP            MATCH</span>\n' +
-'<span class="header">------------------------------------  --------  -------------------  -----</span>\n' +
-'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  <span class="id">a4f19c02</span>  <span class="dim">2026-06-06 09:37:50</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
-'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  <span class="id">7c3e8d55</span>  <span class="dim">2026-05-14 22:05:11</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
-'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  <span class="id">e219fa10</span>  <span class="dim">2026-06-28 20:58:34</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
+'<span class="header">CONVERSATION ID                       REPO      MSG       TIMESTAMP            MATCH</span>\n' +
+'<span class="header">------------------------------------  --------  --------  -------------------  -----</span>\n' +
+'<span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  api       <span class="id">a4f19c02</span>  <span class="dim">2026-06-06 09:37:50</span>  …run the <span class="highlight">database migration</span> before the deploy, then…\n' +
+'<span class="id">b1c29a16-04b0-46c7-87d6-3f9bed8e996a</span>  billing   <span class="id">7c3e8d55</span>  <span class="dim">2026-05-14 22:05:11</span>  …reverting the <span class="highlight">migration</span> broke <span class="highlight">database</span> constraints on…\n' +
+'<span class="id">acae171d-f831-49c2-88cb-038285a3e627</span>  web-app   <span class="id">e219fa10</span>  <span class="dim">2026-06-28 20:58:34</span>  …I want to add a <span class="highlight">database migration</span> for the users table…\n' +
 '\n' +
 '<span class="dim">Showing 3 of 12 matches (page 1, limit 50)</span>',
           hold: 1700
@@ -1095,7 +1095,7 @@
         {
           cmd: 'claude-watch search "database migration" --msg-id a4f19c02',
           out:
-'<span class="dim">── </span><span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  msg:<span class="id">a4f19c02-91d3-4c7e-9b8a-2fb0e5c19d84</span>  <span class="dim">2026-06-06 09:37:50 ──</span>\n' +
+'<span class="dim">── </span><span class="id">83d192d6-e704-4975-b650-450aa2264072</span>  repo:api  msg:<span class="id">a4f19c02-91d3-4c7e-9b8a-2fb0e5c19d84</span>  <span class="dim">2026-06-06 09:37:50 ──</span>\n' +
 '\n' +
 'Yes — you can run the <span class="highlight">database migration</span> before the deploy, then flip the feature flag on\n' +
 'after the app comes back up. That gives you two clean rollback points: revert the flag if the\n' +

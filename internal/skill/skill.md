@@ -35,7 +35,7 @@ claude-watch search "foo" --msg-id 97fd879c            # drill into one message 
 claude-watch search "foo" --json                       # machine-readable
 ```
 
-Default output is a four-column table: `CONVERSATION ID | MSG | TIMESTAMP | MATCH`. The `MSG` column is the first 8 chars of the message UUID — enough to feed back into `--msg-id`. Matches are highlighted with ANSI in the terminal; `--json` strips the `<mark>` tags and adds `session_id`, `project`, full message `uuid`, and `timestamp` per hit.
+Default output is a five-column table: `CONVERSATION ID | REPO | MSG | TIMESTAMP | MATCH`. The `REPO` column is the project (repo) the session ran in — the same name `--repo` filters on. The `MSG` column is the first 8 chars of the message UUID — enough to feed back into `--msg-id`. Matches are highlighted with ANSI in the terminal; `--json` strips the `<mark>` tags and adds `session_id`, `project`, full message `uuid`, and `timestamp` per hit.
 
 **Reading a specific hit in full.** From the table, grab the `MSG` prefix and re-run with `--msg-id <prefix>` (or the full UUID from `--json`). That filters to just that message and prints its full `content_text` with query terms highlighted — no need to `export` the whole session just to read one turn. `--expand` alone does the same for every hit on the page (useful when you want the top N matches in full).
 

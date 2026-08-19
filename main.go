@@ -670,13 +670,25 @@ func cmdSearch() {
 	const msgW = 8 // short msg_uuid prefix
 	const tsW = 19 // "2006-01-02 15:04:05"
 
+	// REPO column width adapts to the repo names actually on this page, so
+	// short project names don't leave a wide gap before MATCH.
+	repoW := len("REPO")
+	for _, r := range kept {
+		if n := len([]rune(repoNameForDisplay(r.ProjectName))); n > repoW {
+			repoW = n
+		}
+	}
+	if repoW > maxRepoW {
+		repoW = maxRepoW
+	}
+
 	if expand {
 		for i, r := range kept {
 			if i > 0 {
 				fmt.Println()
 			}
 			ts := formatSearchTimestamp(r.Timestamp)
-			fmt.Printf("── %s  msg:%s  %s ──\n", r.SessionID, r.MsgUUID, ts)
+			fmt.Printf("── %s  repo:%s  msg:%s  %s ──\n", r.SessionID, repoNameForDisplay(r.ProjectName), r.MsgUUID, ts)
 			text := fullText[r.SessionID+"\x00"+r.MsgUUID]
 			if text == "" {
 				// Fall back to the snippet (with mark tags stripped) if content is missing.
@@ -685,13 +697,40 @@ func cmdSearch() {
 			fmt.Println(highlightQueryTerms(text, query))
 		}
 	} else {
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n", idW, "CONVERSATION ID", msgW, "MSG", tsW, "TIMESTAMP", "MATCH")
-		fmt.Printf("%s  %s  %s  %s\n", strings.Repeat("-", idW), strings.Repeat("-", msgW), strings.Repeat("-", tsW), strings.Repeat("-", 5))
+		fmt.Printf("%-*s  %s  %-*s  %-*s  %s\n", idW, "CONVERSATION ID", repoCell("REPO", repoW), msgW, "MSG", tsW, "TIMESTAMP", "MATCH")
+		fmt.Printf("%s  %s  %s  %s  %s\n", strings.Repeat("-", idW), strings.Repeat("-", repoW), strings.Repeat("-", msgW), strings.Repeat("-", tsW), strings.Repeat("-", 5))
 		for _, r := range kept {
-			fmt.Printf("%-*s  %-*s  %-*s  %s\n", idW, r.SessionID, msgW, shortMsgID(r.MsgUUID), tsW, formatSearchTimestamp(r.Timestamp), renderSnippetForTerminal(r.Snippet))
+			fmt.Printf("%-*s  %s  %-*s  %-*s  %s\n", idW, r.SessionID, repoCell(repoNameForDisplay(r.ProjectName), repoW), msgW, shortMsgID(r.MsgUUID), tsW, formatSearchTimestamp(r.Timestamp), renderSnippetForTerminal(r.Snippet))
 		}
 	}
 	fmt.Fprintf(os.Stderr, "\nShowing %d of %d matches (page %d, limit %d)\n", len(kept), total, page, limit)
+}
+
+// maxRepoW caps the REPO column so one long project name can't push MATCH
+// off the right edge of the terminal.
+const maxRepoW = 24
+
+// repoNameForDisplay is the repo (project) a session ran in. Sessions indexed
+// before project_name was recorded fall back to a placeholder.
+func repoNameForDisplay(project string) string {
+	if project == "" {
+		return "-"
+	}
+	return project
+}
+
+// repoCell renders a repo name padded (or truncated with "…") to exactly
+// width display columns. Padding is counted in runes, not bytes, so the
+// multi-byte ellipsis does not skew the column.
+func repoCell(name string, width int) string {
+	runes := []rune(name)
+	if len(runes) > width {
+		if width <= 1 {
+			return string(runes[:width])
+		}
+		return string(runes[:width-1]) + "…"
+	}
+	return name + strings.Repeat(" ", width-len(runes))
 }
 
 // shortMsgID returns the first 8 chars of a message UUID — enough to be a

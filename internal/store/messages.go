@@ -19,7 +19,26 @@ type MessageRow struct {
 	Seq         int
 }
 
+// UpsertMessages writes rows into the messages table AND the FTS index.
+// FTS work is expensive with the pure-Go SQLite driver — for the hook's hot
+// path prefer UpsertMessagesFast, then let a background pass call CatchUpFTS.
+// This function is still used by RebuildFTS and other offline paths that
+// want a fully-consistent FTS after the call returns.
 func UpsertMessages(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) error {
+	if err := UpsertMessagesFast(db, sessionID, msgs); err != nil {
+		return err
+	}
+	return upsertFTSForMessages(db, sessionID, msgs)
+}
+
+// UpsertMessagesFast writes rows only into the messages table and skips the
+// FTS index. Runs one transaction with prepared statements. Callers that need
+// search consistency must arrange for CatchUpFTS to run separately (serve
+// does this on startup + periodically; rebuild does it inline).
+func UpsertMessagesFast(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) error {
+	if len(msgs) == 0 {
+		return nil
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -46,20 +65,30 @@ func UpsertMessages(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) e
 			m.ContentText, m.ContentJSON,
 			m.Timestamp.UTC().Format(time.RFC3339), m.Seq)
 		if err != nil {
-			continue // skip bad rows, don't abort entire batch
+			continue
 		}
 	}
+	return tx.Commit()
+}
 
-	// Update FTS per-message (not per-session) to avoid wiping entries from
-	// other JSONL files of the same session (multi-file sessions from resumes).
+func upsertFTSForMessages(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	ftsDelete, err := tx.Prepare("DELETE FROM messages_fts WHERE session_id = ? AND msg_uuid = ?")
 	if err != nil {
-		return tx.Commit()
+		return err
 	}
 	defer ftsDelete.Close()
 	ftsInsert, err := tx.Prepare("INSERT INTO messages_fts(session_id, msg_uuid, content_text) VALUES (?, ?, ?)")
 	if err != nil {
-		return tx.Commit()
+		return err
 	}
 	defer ftsInsert.Close()
 
@@ -69,7 +98,44 @@ func UpsertMessages(db *sql.DB, sessionID string, msgs []claude.ParsedMessage) e
 			ftsInsert.Exec(sessionID, m.UUID, m.ContentText)
 		}
 	}
+	return tx.Commit()
+}
 
+// CatchUpFTS indexes any messages that are missing from messages_fts,
+// grouped by session. Cheap when the FTS index is already current; runs
+// through the outstanding backlog otherwise. Intended for background use
+// (serve startup + periodic tick) so the hook path stays fast.
+func CatchUpFTS(db *sql.DB) error {
+	rows, err := db.Query(`
+		SELECT m.session_id, m.msg_uuid, COALESCE(m.content_text, '')
+		FROM messages m
+		LEFT JOIN messages_fts f
+		  ON f.session_id = m.session_id AND f.msg_uuid = m.msg_uuid
+		WHERE f.msg_uuid IS NULL AND m.content_text != ''`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	ins, err := tx.Prepare("INSERT INTO messages_fts(session_id, msg_uuid, content_text) VALUES (?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer ins.Close()
+
+	for rows.Next() {
+		var sid, uuid, text string
+		if err := rows.Scan(&sid, &uuid, &text); err != nil {
+			continue
+		}
+		ins.Exec(sid, uuid, text)
+	}
 	return tx.Commit()
 }
 

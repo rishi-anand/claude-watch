@@ -111,16 +111,49 @@ func cmdServe() {
 		fmt.Fprintf(os.Stderr, "warning: sync: %v\n", err)
 	}
 
-	// Auto-rebuild FTS if it's out of sync with the messages table
+	// Auto-catch-up FTS if it's out of sync with the messages table. The hook
+	// path writes messages fast and skips FTS to stay under Claude Code's 30s
+	// hook budget, so we reconcile here.
 	var msgCount, ftsCount int
 	database.QueryRow("SELECT COUNT(*) FROM messages WHERE content_text != ''").Scan(&msgCount)
 	database.QueryRow("SELECT COUNT(*) FROM messages_fts").Scan(&ftsCount)
 	if ftsCount < msgCount {
-		fmt.Printf("Rebuilding search index (%d/%d messages indexed)...\n", ftsCount, msgCount)
-		if err := store.RebuildFTS(database); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: rebuild FTS: %v\n", err)
+		fmt.Printf("Catching up search index (%d/%d messages indexed)...\n", ftsCount, msgCount)
+		if err := store.CatchUpFTS(database); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: catch-up FTS: %v\n", err)
 		}
 	}
+
+	// Enforce retention on startup (default 180 days, override with
+	// CLAUDE_WATCH_RETENTION_DAYS). Trims sessions past the cutoff along
+	// with their messages, FTS rows, jsonl_state, and MD files.
+	cutoff := time.Now().Add(-time.Duration(cfg.RetentionDays) * 24 * time.Hour)
+	if pruned, err := store.PruneOlderThan(database, cutoff); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: prune: %v\n", err)
+	} else if pruned > 0 {
+		fmt.Printf("Pruned %d sessions older than %d days\n", pruned, cfg.RetentionDays)
+	}
+
+	// Keep FTS current and re-prune daily while serve is running.
+	go func() {
+		fts := time.NewTicker(60 * time.Second)
+		prune := time.NewTicker(24 * time.Hour)
+		defer fts.Stop()
+		defer prune.Stop()
+		for {
+			select {
+			case <-fts.C:
+				if err := store.CatchUpFTS(database); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: catch-up FTS: %v\n", err)
+				}
+			case <-prune.C:
+				cutoff := time.Now().Add(-time.Duration(cfg.RetentionDays) * 24 * time.Hour)
+				if _, err := store.PruneOlderThan(database, cutoff); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: prune: %v\n", err)
+				}
+			}
+		}
+	}()
 
 	var count int
 	database.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&count)

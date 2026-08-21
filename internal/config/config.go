@@ -7,11 +7,17 @@ import (
 )
 
 type Config struct {
-	DataDir   string
-	ClaudeDir string
-	Port      int
-	NoBrowser bool
+	DataDir        string
+	ClaudeDir      string
+	Port           int
+	NoBrowser      bool
+	RetentionDays  int
 }
+
+// DefaultRetentionDays is the built-in retention window in days. Six months
+// of history keeps the DB and MD store manageable — sessions with a
+// last_active_at older than this are pruned by serve.
+const DefaultRetentionDays = 180
 
 func Load() *Config {
 	home, _ := os.UserHomeDir()
@@ -33,10 +39,18 @@ func Load() *Config {
 		}
 	}
 
+	retention := DefaultRetentionDays
+	if r := os.Getenv("CLAUDE_WATCH_RETENTION_DAYS"); r != "" {
+		if v, err := strconv.Atoi(r); err == nil && v > 0 {
+			retention = v
+		}
+	}
+
 	return &Config{
-		DataDir:   dataDir,
-		ClaudeDir: claudeDir,
-		Port:      port,
+		DataDir:       dataDir,
+		ClaudeDir:     claudeDir,
+		Port:          port,
+		RetentionDays: retention,
 	}
 }
 

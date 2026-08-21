@@ -2,7 +2,9 @@ package claude
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -13,125 +15,137 @@ import (
 var systemTagsRe = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>\s*|<task-notification>.*?</task-notification>\s*|<available-deferred-tools>.*?</available-deferred-tools>\s*|<user-prompt-submit-hook>.*?</user-prompt-submit-hook>\s*`)
 
 func ParseJSONL(path string) (*Session, error) {
+	s, _, err := ParseJSONLFrom(path, 0, 0)
+	return s, err
+}
+
+// ParseJSONLFrom parses the JSONL file starting at startOffset, seeding the
+// sequence counter with startSeq (so the first indexable message gets
+// startSeq+1). Only complete newline-terminated lines are consumed — a
+// trailing partial line at EOF is left for the next call. Returns the parsed
+// session (populated only from the consumed lines), the byte offset just past
+// the last consumed newline, and any read error.
+func ParseJSONLFrom(path string, startOffset int64, startSeq int) (*Session, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, startOffset, err
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 10*1024*1024), 10*1024*1024)
+	if startOffset > 0 {
+		if _, err := f.Seek(startOffset, io.SeekStart); err != nil {
+			return nil, startOffset, err
+		}
+	}
 
+	r := bufio.NewReaderSize(f, 1<<20)
 	session := &Session{}
-	seq := 0
+	seq := startSeq
+	offset := startOffset
 
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+	for {
+		line, err := r.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return session, offset, err
+		}
+		offset += int64(len(line))
+		trimmed := bytes.TrimRight(line, "\r\n")
+		if len(trimmed) == 0 {
 			continue
 		}
+		processJSONLLine(session, trimmed, &seq)
+	}
+	return session, offset, nil
+}
 
-		var entry Entry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			continue
+func processJSONLLine(session *Session, line []byte, seq *int) {
+	var entry Entry
+	if err := json.Unmarshal(line, &entry); err != nil {
+		return
+	}
+
+	// Set session ID from first entry that has one
+	if session.SessionID == "" && entry.SessionID != "" {
+		session.SessionID = entry.SessionID
+	}
+
+	// Set project path from first entry with cwd
+	if session.ProjectPath == "" && entry.CWD != "" {
+		session.ProjectPath = entry.CWD
+		session.ProjectName = ProjectNameFromCWD(entry.CWD)
+	}
+
+	ts, _ := time.Parse(time.RFC3339Nano, entry.Timestamp)
+	if !ts.IsZero() {
+		if session.StartedAt.IsZero() || ts.Before(session.StartedAt) {
+			session.StartedAt = ts
 		}
-
-		// Set session ID from first entry that has one
-		if session.SessionID == "" && entry.SessionID != "" {
-			session.SessionID = entry.SessionID
-		}
-
-		// Set project path from first entry with cwd
-		if session.ProjectPath == "" && entry.CWD != "" {
-			session.ProjectPath = entry.CWD
-			session.ProjectName = ProjectNameFromCWD(entry.CWD)
-		}
-
-		// Parse timestamp
-		ts, _ := time.Parse(time.RFC3339Nano, entry.Timestamp)
-		if !ts.IsZero() {
-			if session.StartedAt.IsZero() || ts.Before(session.StartedAt) {
-				session.StartedAt = ts
-			}
-			if ts.After(session.LastActiveAt) {
-				session.LastActiveAt = ts
-			}
-		}
-
-		switch entry.Type {
-		case "progress", "queue-operation", "file-history-snapshot":
-			continue
-		case "system":
-			if entry.Subtype == "turn_duration" {
-				continue
-			}
-			if entry.Subtype == "compact_boundary" {
-				session.HasCompaction = true
-				seq++
-				msg := ParsedMessage{
-					UUID:      entry.UUID,
-					MsgType:   "compact_boundary",
-					Timestamp: ts,
-					Seq:       seq,
-				}
-				session.Messages = append(session.Messages, msg)
-			}
-			continue
-		case "user":
-			if entry.Message == nil {
-				continue
-			}
-			seq++
-			msgType := "user"
-			if entry.Message.IsCompactSummary {
-				msgType = "compact_summary"
-			}
-			contentText := ExtractText(entry.Message.Content)
-			contentJSON := rawContentJSON(entry.Message.Content)
-			msg := ParsedMessage{
-				UUID:             entry.UUID,
-				ParentUUID:       entry.ParentUUID,
-				MsgType:          msgType,
-				Role:             "user",
-				ContentText:      contentText,
-				ContentJSON:      contentJSON,
-				IsCompactSummary: entry.Message.IsCompactSummary,
-				IsSidechain:      entry.IsSidechain,
-				Timestamp:        ts,
-				Seq:              seq,
-			}
-			session.Messages = append(session.Messages, msg)
-		case "assistant":
-			if entry.Message == nil {
-				continue
-			}
-			// Set model from first assistant message
-			if session.Model == "" && entry.Message.Model != "" {
-				session.Model = entry.Message.Model
-			}
-			seq++
-			contentText := ExtractText(entry.Message.Content)
-			contentJSON := rawContentJSON(entry.Message.Content)
-			msg := ParsedMessage{
-				UUID:        entry.UUID,
-				ParentUUID:  entry.ParentUUID,
-				MsgType:     "assistant",
-				Role:        "assistant",
-				ContentText: contentText,
-				ContentJSON: contentJSON,
-				IsSidechain: entry.IsSidechain,
-				Timestamp:   ts,
-				Seq:         seq,
-			}
-			session.Messages = append(session.Messages, msg)
+		if ts.After(session.LastActiveAt) {
+			session.LastActiveAt = ts
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	switch entry.Type {
+	case "progress", "queue-operation", "file-history-snapshot":
+		return
+	case "system":
+		if entry.Subtype == "turn_duration" {
+			return
+		}
+		if entry.Subtype == "compact_boundary" {
+			session.HasCompaction = true
+			*seq++
+			session.Messages = append(session.Messages, ParsedMessage{
+				UUID:      entry.UUID,
+				MsgType:   "compact_boundary",
+				Timestamp: ts,
+				Seq:       *seq,
+			})
+		}
+	case "user":
+		if entry.Message == nil {
+			return
+		}
+		*seq++
+		msgType := "user"
+		if entry.Message.IsCompactSummary {
+			msgType = "compact_summary"
+		}
+		session.Messages = append(session.Messages, ParsedMessage{
+			UUID:             entry.UUID,
+			ParentUUID:       entry.ParentUUID,
+			MsgType:          msgType,
+			Role:             "user",
+			ContentText:      ExtractText(entry.Message.Content),
+			ContentJSON:      rawContentJSON(entry.Message.Content),
+			IsCompactSummary: entry.Message.IsCompactSummary,
+			IsSidechain:      entry.IsSidechain,
+			Timestamp:        ts,
+			Seq:              *seq,
+		})
+	case "assistant":
+		if entry.Message == nil {
+			return
+		}
+		if session.Model == "" && entry.Message.Model != "" {
+			session.Model = entry.Message.Model
+		}
+		*seq++
+		session.Messages = append(session.Messages, ParsedMessage{
+			UUID:        entry.UUID,
+			ParentUUID:  entry.ParentUUID,
+			MsgType:     "assistant",
+			Role:        "assistant",
+			ContentText: ExtractText(entry.Message.Content),
+			ContentJSON: rawContentJSON(entry.Message.Content),
+			IsSidechain: entry.IsSidechain,
+			Timestamp:   ts,
+			Seq:         *seq,
+		})
 	}
-
-	return session, nil
 }
 
 func ExtractText(content ContentValue) string {

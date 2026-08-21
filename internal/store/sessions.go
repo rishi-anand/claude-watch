@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"math"
+	"os"
 	"time"
 
 	"github.com/rishi/claude-watch/internal/claude"
@@ -181,6 +182,168 @@ func GetAllMtimes(db *sql.DB) (map[string]float64, error) {
 		result[path] = mtime
 	}
 	return result, rows.Err()
+}
+
+// GetJSONLState returns the last recorded offset, mtime, and session_id for a
+// JSONL transcript path. Returns zero values (with a nil error) if no state
+// is recorded yet.
+func GetJSONLState(db *sql.DB, path string) (offset int64, mtime float64, sessionID string, err error) {
+	err = db.QueryRow(
+		`SELECT last_offset, last_mtime, session_id FROM jsonl_state WHERE path = ?`,
+		path).Scan(&offset, &mtime, &sessionID)
+	if err == sql.ErrNoRows {
+		return 0, 0, "", nil
+	}
+	return
+}
+
+// UpsertJSONLState records the last successfully consumed offset and mtime for
+// a JSONL transcript. Subsequent syncs seek to this offset instead of
+// re-reading the whole file.
+func UpsertJSONLState(db *sql.DB, path, sessionID string, offset int64, mtime float64) error {
+	_, err := db.Exec(`
+		INSERT INTO jsonl_state (path, session_id, last_offset, last_mtime, indexed_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(path) DO UPDATE SET
+			session_id=excluded.session_id,
+			last_offset=excluded.last_offset,
+			last_mtime=excluded.last_mtime,
+			indexed_at=CURRENT_TIMESTAMP`,
+		path, sessionID, offset, mtime)
+	return err
+}
+
+// GetAllJSONLMtimes returns a map of JSONL path -> last recorded mtime,
+// used by ScanAll to skip files whose mtime is unchanged.
+func GetAllJSONLMtimes(db *sql.DB) (map[string]float64, error) {
+	rows, err := db.Query(`SELECT path, last_mtime FROM jsonl_state`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]float64)
+	for rows.Next() {
+		var p string
+		var m float64
+		if err := rows.Scan(&p, &m); err != nil {
+			return nil, err
+		}
+		result[p] = m
+	}
+	return result, rows.Err()
+}
+
+// GetLastSeq returns the highest seq value recorded for a session, or 0 if
+// the session has no rows yet.
+func GetLastSeq(db *sql.DB, sessionID string) (int, error) {
+	var seq sql.NullInt64
+	err := db.QueryRow(
+		`SELECT MAX(seq) FROM messages WHERE session_id = ?`,
+		sessionID).Scan(&seq)
+	if err != nil {
+		return 0, err
+	}
+	if !seq.Valid {
+		return 0, nil
+	}
+	return int(seq.Int64), nil
+}
+
+// PruneOlderThan deletes sessions whose last_active_at is strictly before
+// cutoff, together with their messages, FTS rows, jsonl_state rows, and MD
+// files. Returns the number of sessions removed. Cheap when nothing is
+// eligible; intended to run on serve startup and once per day.
+func PruneOlderThan(db *sql.DB, cutoff time.Time) (int, error) {
+	cutoffStr := cutoff.UTC().Format(time.RFC3339)
+
+	rows, err := db.Query(
+		`SELECT session_id, md_path FROM sessions WHERE last_active_at < ?`,
+		cutoffStr)
+	if err != nil {
+		return 0, err
+	}
+	type stale struct{ id, mdPath string }
+	var victims []stale
+	for rows.Next() {
+		var v stale
+		if err := rows.Scan(&v.id, &v.mdPath); err == nil {
+			victims = append(victims, v)
+		}
+	}
+	rows.Close()
+
+	if len(victims) == 0 {
+		return 0, nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	delMsg, _ := tx.Prepare(`DELETE FROM messages WHERE session_id = ?`)
+	defer delMsg.Close()
+	delFTS, _ := tx.Prepare(`DELETE FROM messages_fts WHERE session_id = ?`)
+	defer delFTS.Close()
+	delJSONL, _ := tx.Prepare(`DELETE FROM jsonl_state WHERE session_id = ?`)
+	defer delJSONL.Close()
+	delSess, _ := tx.Prepare(`DELETE FROM sessions WHERE session_id = ?`)
+	defer delSess.Close()
+
+	for _, v := range victims {
+		delMsg.Exec(v.id)
+		delFTS.Exec(v.id)
+		delJSONL.Exec(v.id)
+		delSess.Exec(v.id)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	for _, v := range victims {
+		if v.mdPath != "" {
+			os.Remove(v.mdPath)
+		}
+	}
+	return len(victims), nil
+}
+
+// UpdateSessionIncremental applies a delta parse to an existing sessions row:
+// bumps message_count by the delta count, advances last_active_at and
+// last_message when newer, ORs has_compaction, and refreshes md_path/md_mtime.
+// One-time fields (started_at, first_message, slug, git_branch, model) are
+// left alone.
+func UpdateSessionIncremental(db *sql.DB, session *claude.Session, mdPath string, mdMtime float64) error {
+	lastMsg := ""
+	deltaCount := 0
+	for _, m := range session.Messages {
+		if m.MsgType == "user" || m.MsgType == "assistant" {
+			deltaCount++
+			lastMsg = truncate(m.ContentText, 200)
+		}
+	}
+	lastActive := session.LastActiveAt.UTC().Format(time.RFC3339)
+	hasCompaction := 0
+	if session.HasCompaction {
+		hasCompaction = 1
+	}
+
+	_, err := db.Exec(`
+		UPDATE sessions SET
+			last_message   = CASE WHEN ? <> '' THEN ? ELSE last_message END,
+			last_active_at = CASE WHEN ? > last_active_at THEN ? ELSE last_active_at END,
+			message_count  = message_count + ?,
+			has_compaction = has_compaction | ?,
+			md_path        = ?,
+			md_mtime       = ?,
+			updated_at     = CURRENT_TIMESTAMP
+		WHERE session_id = ?`,
+		lastMsg, lastMsg,
+		lastActive, lastActive,
+		deltaCount, hasCompaction, mdPath, mdMtime, session.SessionID)
+	return err
 }
 
 func truncate(s string, maxLen int) string {

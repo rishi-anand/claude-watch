@@ -44,3 +44,11 @@ CREATE TABLE IF NOT EXISTS index_state (
     last_mtime  REAL NOT NULL,
     indexed_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS jsonl_state (
+    path         TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL,
+    last_offset  INTEGER NOT NULL DEFAULT 0,
+    last_mtime   REAL NOT NULL DEFAULT 0,
+    indexed_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);

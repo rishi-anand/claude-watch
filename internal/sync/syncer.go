@@ -13,72 +13,132 @@ import (
 )
 
 func SyncFromTranscript(cfg *config.Config, db *sql.DB, transcriptPath string) error {
-	session, err := claude.ParseJSONL(transcriptPath)
+	fi, err := os.Stat(transcriptPath)
+	if err != nil {
+		return err
+	}
+	fileSize := fi.Size()
+	curMtime := float64(fi.ModTime().UnixMilli()) / 1000.0
+
+	prevOffset, _, prevSessionID, err := store.GetJSONLState(db, transcriptPath)
+	if err != nil {
+		return fmt.Errorf("read jsonl state: %w", err)
+	}
+	// File shrank (rotated / truncated) — restart from the beginning.
+	if prevOffset > fileSize {
+		prevOffset = 0
+		prevSessionID = ""
+	}
+	// Nothing new since the last sync.
+	if prevOffset > 0 && prevOffset == fileSize {
+		return nil
+	}
+
+	if prevOffset == 0 || prevSessionID == "" {
+		return syncFull(cfg, db, transcriptPath, curMtime)
+	}
+	return syncIncremental(cfg, db, transcriptPath, prevOffset, prevSessionID, curMtime)
+}
+
+func syncFull(cfg *config.Config, db *sql.DB, transcriptPath string, mtime float64) error {
+	session, newOffset, err := claude.ParseJSONLFrom(transcriptPath, 0, 0)
 	if err != nil {
 		return fmt.Errorf("parse JSONL: %w", err)
 	}
 	if session.SessionID == "" {
-		return nil // silently skip files without a session ID (incomplete/empty sessions)
+		return nil
 	}
 
-	// Check if MD file already exists
 	mdPath := filepath.Join(cfg.SessionsDir(), session.ProjectName, session.SessionID+".md")
 	if _, err := os.Stat(mdPath); err == nil {
-		// Append new messages
 		if err := markdown.AppendMessages(mdPath, session); err != nil {
 			return fmt.Errorf("append messages: %w", err)
 		}
 	} else {
-		// Write full session
 		mdPath, err = markdown.WriteSession(cfg.DataDir, session)
 		if err != nil {
 			return fmt.Errorf("write session: %w", err)
 		}
 	}
 
-	// Get mtime of md file
 	mdInfo, err := os.Stat(mdPath)
 	if err != nil {
 		return err
 	}
 	mdMtime := float64(mdInfo.ModTime().UnixMilli()) / 1000.0
-
-	// Upsert session and messages into SQLite
 	if err := store.UpsertSession(db, session, mdPath, mdMtime); err != nil {
 		return fmt.Errorf("upsert session: %w", err)
 	}
-	if err := store.UpsertMessages(db, session.SessionID, session.Messages); err != nil {
+	if err := store.UpsertMessagesFast(db, session.SessionID, session.Messages); err != nil {
 		return fmt.Errorf("upsert messages: %w", err)
 	}
+	_ = store.UpsertJSONLState(db, transcriptPath, session.SessionID, newOffset, mtime)
+	return nil
+}
 
-	// Record JSONL mtime so future startup scans can skip unchanged files.
-	// This ensures serve restarts (and post-rebuild starts) are fast.
-	if info, err := os.Stat(transcriptPath); err == nil {
-		mtime := float64(info.ModTime().UnixMilli()) / 1000.0
-		recordJSONLMtime(db, transcriptPath, mtime)
+func syncIncremental(cfg *config.Config, db *sql.DB, transcriptPath string, prevOffset int64, sessionID string, mtime float64) error {
+	lastSeq, _ := store.GetLastSeq(db, sessionID)
+	delta, newOffset, err := claude.ParseJSONLFrom(transcriptPath, prevOffset, lastSeq)
+	if err != nil {
+		return fmt.Errorf("parse JSONL tail: %w", err)
+	}
+	if newOffset == prevOffset {
+		return nil
+	}
+	if delta.SessionID == "" {
+		delta.SessionID = sessionID
+	}
+	if delta.ProjectName == "" {
+		row, err := store.GetSession(db, sessionID)
+		if err != nil || row == nil {
+			// Sessions row is missing — force a full resync next time.
+			_ = store.UpsertJSONLState(db, transcriptPath, sessionID, 0, mtime)
+			return nil
+		}
+		delta.ProjectName = row.ProjectName
+		delta.ProjectPath = row.ProjectPath
 	}
 
+	if len(delta.Messages) == 0 {
+		// No indexable rows in the delta — still advance the offset so we
+		// don't rescan these bytes next time.
+		_ = store.UpsertJSONLState(db, transcriptPath, sessionID, newOffset, mtime)
+		return nil
+	}
+
+	mdPath := filepath.Join(cfg.SessionsDir(), delta.ProjectName, delta.SessionID+".md")
+	if _, err := os.Stat(mdPath); err != nil {
+		// MD file was removed out from under us — start over.
+		_ = store.UpsertJSONLState(db, transcriptPath, sessionID, 0, mtime)
+		return syncFull(cfg, db, transcriptPath, mtime)
+	}
+	if err := markdown.AppendMessages(mdPath, delta); err != nil {
+		return fmt.Errorf("append messages: %w", err)
+	}
+	mdInfo, err := os.Stat(mdPath)
+	if err != nil {
+		return err
+	}
+	mdMtime := float64(mdInfo.ModTime().UnixMilli()) / 1000.0
+	if err := store.UpsertMessagesFast(db, delta.SessionID, delta.Messages); err != nil {
+		return fmt.Errorf("upsert messages: %w", err)
+	}
+	if err := store.UpdateSessionIncremental(db, delta, mdPath, mdMtime); err != nil {
+		return fmt.Errorf("update session: %w", err)
+	}
+	_ = store.UpsertJSONLState(db, transcriptPath, delta.SessionID, newOffset, mtime)
 	return nil
 }
 
 func SyncAll(cfg *config.Config, db *sql.DB) error {
-	mtimes, err := store.GetAllMtimes(db)
-	if err != nil {
-		return err
-	}
-
-	// Scan for JSONL files — use mtimes keyed by JSONL path, not md path
-	// We need to track JSONL mtimes separately
-	jsonlMtimes, err := getJSONLMtimes(db)
+	jsonlMtimes, err := store.GetAllJSONLMtimes(db)
 	if err != nil {
 		jsonlMtimes = make(map[string]float64)
 	}
-
 	changed, err := claude.ScanAll(cfg, jsonlMtimes)
 	if err != nil {
 		return err
 	}
-	_ = mtimes // mtimes used for md files, jsonlMtimes for JSONL
 
 	if len(changed) > 0 {
 		fmt.Printf("Syncing %d session files...\n", len(changed))
@@ -88,56 +148,11 @@ func SyncAll(cfg *config.Config, db *sql.DB) error {
 			fmt.Fprintf(os.Stderr, "warning: sync %s: %v\n", path, err)
 		}
 	}
-
 	return nil
 }
 
+// RebuildIndex is kept for API compatibility. Rebuilding is handled by the
+// rebuild command via SyncFromTranscript + store.RebuildFTS.
 func RebuildIndex(cfg *config.Config, db *sql.DB) error {
-	// Clear existing data
-	db.Exec("DELETE FROM messages_fts")
-	db.Exec("DELETE FROM messages")
-	db.Exec("DELETE FROM sessions")
-	db.Exec("DELETE FROM index_state")
-
-	// Walk all .md files in sessions dir
-	sessionsDir := cfg.SessionsDir()
-	return filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() || filepath.Ext(path) != ".md" {
-			return nil
-		}
-
-		// We need the original JSONL to rebuild, so scan JSONL files instead
-		return nil
-	})
-}
-
-func getJSONLMtimes(db *sql.DB) (map[string]float64, error) {
-	// We store JSONL mtimes in index_state with a jsonl: prefix
-	rows, err := db.Query("SELECT md_path, last_mtime FROM index_state WHERE md_path LIKE 'jsonl:%'")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make(map[string]float64)
-	for rows.Next() {
-		var path string
-		var mtime float64
-		if err := rows.Scan(&path, &mtime); err != nil {
-			return nil, err
-		}
-		// Strip jsonl: prefix
-		result[path[6:]] = mtime
-	}
-	return result, rows.Err()
-}
-
-func recordJSONLMtime(db *sql.DB, path string, mtime float64) {
-	db.Exec(`INSERT INTO index_state (md_path, last_mtime, indexed_at)
-		VALUES (?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(md_path) DO UPDATE SET last_mtime=excluded.last_mtime, indexed_at=CURRENT_TIMESTAMP`,
-		"jsonl:"+path, mtime)
+	return nil
 }
